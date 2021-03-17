@@ -129,10 +129,109 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             );
         }
         Ok(evaluated
-            .into_sorted_vec()
+            //.into_sorted_vec()
+            .into_vec()
             .into_iter()
             .map(Into::into)
             .collect())
+    }
+
+    pub fn best_n_within<F>(&self, point: &[A], radius: A, max_qty: usize, distance: &F) -> Result<Vec<T>, ErrorKind>
+        where
+            F: Fn(&[A], &[A]) -> A,
+            T: Copy + Ord
+    {
+        if let Err(err) = self.check_point(point) {
+            return Err(err);
+        }
+        if self.size == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut pending = BinaryHeap::new();
+        let mut evaluated = BinaryHeap::<T>::new();
+
+        pending.push(HeapElement {
+            distance: A::zero(),
+            element: self,
+        });
+
+        while !pending.is_empty() && (-pending.peek().unwrap().distance <= radius) {
+            self.best_n_within_step(
+                point,
+                self.size,
+                max_qty,
+                radius,
+                distance,
+                &mut pending,
+                &mut evaluated,
+            );
+        }
+
+        Ok(evaluated
+            //.into_sorted_vec()
+            .into_vec()
+            .into_iter()
+            //.map(Into::into)
+            .collect())
+    }
+
+    fn best_n_within_step<'b, F>(
+        &self,
+        point: &[A],
+        num: usize,
+        max_qty: usize,
+        max_dist: A,
+        distance: &F,
+        pending: &mut BinaryHeap<HeapElement<A, &'b Self>>,
+        evaluated: &mut BinaryHeap<T>,
+    ) where
+        F: Fn(&[A], &[A]) -> A,
+        T: Copy + Ord
+    {
+        let mut curr = &*pending.pop().unwrap().element;
+        debug_assert!(evaluated.len() <= num);
+
+        while !curr.is_leaf() {
+            let candidate;
+            if curr.belongs_in_left(point) {
+                candidate = curr.right.as_ref().unwrap();
+                curr = curr.left.as_ref().unwrap();
+            } else {
+                candidate = curr.left.as_ref().unwrap();
+                curr = curr.right.as_ref().unwrap();
+            }
+            let candidate_to_space = util::distance_to_space(
+                point,
+                &*candidate.min_bounds,
+                &*candidate.max_bounds,
+                distance,
+            );
+            if candidate_to_space <= max_dist {
+                pending.push(HeapElement {
+                    distance: candidate_to_space * -A::one(),
+                    element: &**candidate,
+                });
+            }
+        }
+
+        let points = curr.points.as_ref().unwrap().iter();
+        let bucket = curr.bucket.as_ref().unwrap().iter();
+        let iter = points.zip(bucket).map(|(p, d)| HeapElement {
+            distance: distance(point, p.as_ref()),
+            element: d,
+        });
+
+        for element in iter {
+            if element <= max_dist {
+                if evaluated.len() < max_qty {
+                    evaluated.push(*element.element);
+                } else if element.element < evaluated.peek().unwrap() {
+                    evaluated.pop();
+                    evaluated.push(*element.element);
+                }
+            }
+        }
     }
 
     fn nearest_step<'b, F>(
