@@ -478,12 +478,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
     }
 
     fn is_leaf(&self) -> bool {
-        self.bucket.is_some()
-            && self.points.is_some()
-            && self.split_value.is_none()
-            && self.split_dimension.is_none()
-            && self.left.is_none()
-            && self.right.is_none()
+        self.split_dimension.is_none()
     }
 
     fn check_point(&self, point: &[A]) -> Result<(), ErrorKind> {
