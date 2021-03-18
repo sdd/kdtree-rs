@@ -226,9 +226,11 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             if element <= max_dist {
                 if evaluated.len() < max_qty {
                     evaluated.push(*element.element);
-                } else if element.element < evaluated.peek().unwrap() {
-                    evaluated.pop();
-                    evaluated.push(*element.element);
+                } else {
+                    let mut top = evaluated.peek_mut().unwrap();
+                    if element.element < &top {
+                        *top = *element.element;
+                    }
                 }
             }
         }
