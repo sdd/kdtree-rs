@@ -1,3 +1,4 @@
+#![feature(allocator_api)]
 //! # kdtree
 //!
 //! K-dimensional tree for Rust (bucket point-region implementation)

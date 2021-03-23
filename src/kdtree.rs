@@ -5,6 +5,23 @@ use num_traits::{Float, One, Zero};
 use crate::heap_element::HeapElement;
 use crate::util;
 
+// TODO: get this working
+/*
+use std::alloc::{alloc_zeroed, dealloc, GlobalAlloc, System, Layout};
+struct ZeroedAllocator;
+unsafe impl GlobalAlloc for ZeroedAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        alloc_zeroed(layout)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        dealloc(ptr, layout)
+    }
+}
+#[global_allocator]
+static GLOBAL: ZeroedAllocator = ZeroedAllocator;
+*/
+
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct KdTree<A, T: std::cmp::PartialEq, U: AsRef<[A]>+ std::cmp::PartialEq> {
@@ -32,6 +49,14 @@ pub enum ErrorKind {
     ZeroCapacity,
 }
 
+// TODO: use the zeroed allocator when allocating points. For points on a unit sphere, we can allocate
+//       128bit aligned [f32; 3]'s (this should leave an empty 0 f32 in between each f32x3, assuming that
+//       32 0's is an f32 0!. this can be cast to a __m128 packed f32x4 that we can then do a SIMD
+//       dot product on instead of a squared euclidean. We would have to invert the distance comparison
+//       as a higher valued DP between vecs on a unit sphere indicates smaller distance. This
+//       should be significantly faster than sq_euclidean if the alignment can be done correctly and
+//       the unused fourth element contains a 0f32.
+
 impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::PartialEq> KdTree<A, T, U> {
     pub fn new(dims: usize) -> Self {
         KdTree::with_capacity(dims, 2_usize.pow(4))
@@ -50,8 +75,10 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             max_bounds: max_bounds.into_boxed_slice(),
             split_value: None,
             split_dimension: None,
-            points: Some(vec![]),
-            bucket: Some(vec![]),
+            points: Some(Vec::with_capacity(capacity)),
+            //points: Some(Vec::with_capacity_in(capacity, ZeroedAllocator)),
+            //bucket: Some(vec![]),
+            bucket: Some(Vec::with_capacity(capacity)),
         }
     }
 
@@ -129,11 +156,46 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             );
         }
         Ok(evaluated
-            //.into_sorted_vec()
-            .into_vec()
+            .into_sorted_vec()
+            //.into_vec()
             .into_iter()
             .map(Into::into)
             .collect())
+    }
+
+    pub fn best_n_within_into_iter<F>(&self, point: &[A], radius: A, max_qty: usize, distance: &F) -> impl Iterator<Item = T>
+        where
+            F: Fn(&[A], &[A]) -> A,
+            T: Copy + Ord
+    {
+        // if let Err(err) = self.check_point(point) {
+        //     return Err(err);
+        // }
+        // if self.size == 0 {
+        //     return std::iter::empty::<T>();
+        // }
+
+        let mut pending = BinaryHeap::new();
+        let mut evaluated = BinaryHeap::<T>::new();
+
+        pending.push(HeapElement {
+            distance: A::zero(),
+            element: self,
+        });
+
+        while !pending.is_empty() && (-pending.peek().unwrap().distance <= radius) {
+            self.best_n_within_step(
+                point,
+                self.size,
+                max_qty,
+                radius,
+                distance,
+                &mut pending,
+                &mut evaluated,
+            );
+        }
+
+        evaluated.into_iter()
     }
 
     pub fn best_n_within<F>(&self, point: &[A], radius: A, max_qty: usize, distance: &F) -> Result<Vec<T>, ErrorKind>
@@ -169,10 +231,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
         }
 
         Ok(evaluated
-            //.into_sorted_vec()
             .into_vec()
             .into_iter()
-            //.map(Into::into)
             .collect())
     }
 
@@ -206,6 +266,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 &*candidate.min_bounds,
                 &*candidate.max_bounds,
                 distance,
+                self.dimensions
             );
             if candidate_to_space <= max_dist {
                 pending.push(HeapElement {
@@ -227,6 +288,9 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 if evaluated.len() < max_qty {
                     evaluated.push(*element.element);
                 } else {
+                    // evaluated.pop();
+                    // evaluated.push(*element.element);
+                    //
                     let mut top = evaluated.peek_mut().unwrap();
                     if element.element < &top {
                         *top = *element.element;
@@ -272,6 +336,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 &*candidate.min_bounds,
                 &*candidate.max_bounds,
                 distance,
+                self.dimensions
             );
             if candidate_to_space <= evaluated_dist {
                 pending.push(HeapElement {
@@ -291,9 +356,14 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             if element <= max_dist {
                 if evaluated.len() < num {
                     evaluated.push(element);
-                } else if element < *evaluated.peek().unwrap() {
-                    evaluated.pop();
-                    evaluated.push(element);
+                // } else if element < *evaluated.peek().unwrap() {
+                //     evaluated.pop();
+                //     evaluated.push(element);
+                } else {
+                    let mut top = evaluated.peek_mut().unwrap();
+                    if element < *top {
+                        *top = element;
+                    }
                 }
             }
         }
@@ -321,6 +391,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             pending,
             evaluated,
             distance,
+            dimensions: self.dimensions
         })
     }
 
@@ -337,6 +408,9 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
         }
         let mut pending = BinaryHeap::new();
         let evaluated = BinaryHeap::<HeapElement<A, &mut T>>::new();
+
+        let dimensions = self.dimensions;
+
         pending.push(HeapElement {
             distance: A::zero(),
             element: self,
@@ -346,6 +420,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             pending,
             evaluated,
             distance,
+            dimensions,
         })
     }
 
@@ -482,7 +557,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
     }
 
     fn check_point(&self, point: &[A]) -> Result<(), ErrorKind> {
-        if self.dimensions != point.len() {
+        //if self.dimensions != point.len() {
+        if self.dimensions > point.len() {
             return Err(ErrorKind::WrongDimension);
         }
         for n in point {
@@ -506,6 +582,7 @@ pub struct NearestIter<
     pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, U>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b T>>,
     distance: &'a F,
+    dimensions: usize
 }
 
 impl<'a, 'b, A: Float + Zero + One, T: 'b, U: 'b + AsRef<[A]>, F: 'a> Iterator
@@ -539,6 +616,7 @@ where
                         &*candidate.min_bounds,
                         &*candidate.max_bounds,
                         distance,
+                        self.dimensions
                     ),
                     element: &**candidate,
                 });
@@ -567,6 +645,7 @@ pub struct NearestIterMut<
     pending: BinaryHeap<HeapElement<A, &'b mut KdTree<A, T, U>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b mut T>>,
     distance: &'a F,
+    dimensions: usize
 }
 
 impl<'a, 'b, A: Float + Zero + One, T: 'b, U: 'b + AsRef<[A]>, F: 'a> Iterator
@@ -600,6 +679,7 @@ where
                         &*candidate.min_bounds,
                         &*candidate.max_bounds,
                         distance,
+                        self.dimensions
                     ),
                     element: &mut **candidate,
                 });
@@ -628,8 +708,7 @@ impl std::error::Error for ErrorKind {
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use std::error::Error;
-        write!(f, "KdTree error: {}", self.description())
+        write!(f, "KdTree error: {}", self)
     }
 }
 
