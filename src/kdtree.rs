@@ -1,4 +1,5 @@
 use std::collections::BinaryHeap;
+use std::cell::RefCell;
 
 use num_traits::{Float, One, Zero};
 
@@ -40,6 +41,10 @@ pub struct KdTree<A, T: std::cmp::PartialEq, U: AsRef<[A]>+ std::cmp::PartialEq>
     // leaf
     points: Option<Vec<U>>,
     bucket: Option<Vec<T>>,
+    
+    #[serde(skip_deserializing)]
+    // TODO: this is per-node. only really need per-tree
+    distance_to_space_scratch_vec: Option<RefCell<Vec<A>>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -79,11 +84,17 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             //points: Some(Vec::with_capacity_in(capacity, ZeroedAllocator)),
             //bucket: Some(vec![]),
             bucket: Some(Vec::with_capacity(capacity)),
+            
+            distance_to_space_scratch_vec: Some(RefCell::new(vec![A::nan(); dimensions])),
         }
     }
 
     pub fn size(&self) -> usize {
         self.size
+    }
+    
+    pub fn allocate_dist_scratch(&mut self) {
+        self.distance_to_space_scratch_vec = Some(RefCell::new(vec![A::nan(); self.dimensions]));
     }
 
     pub fn nearest<F>(
@@ -175,7 +186,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
         //     return std::iter::empty::<T>();
         // }
 
-        let mut pending = BinaryHeap::new();
+        let mut pending = Vec::with_capacity(max_qty);
         let mut evaluated = BinaryHeap::<T>::new();
 
         pending.push(HeapElement {
@@ -183,7 +194,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             element: self,
         });
 
-        while !pending.is_empty() && (-pending.peek().unwrap().distance <= radius) {
+        while !pending.is_empty() {
             self.best_n_within_step(
                 point,
                 self.size,
@@ -210,7 +221,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             return Ok(vec![]);
         }
 
-        let mut pending = BinaryHeap::new();
+        let mut pending = Vec::with_capacity(max_qty);
         let mut evaluated = BinaryHeap::<T>::new();
 
         pending.push(HeapElement {
@@ -218,7 +229,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             element: self,
         });
 
-        while !pending.is_empty() && (-pending.peek().unwrap().distance <= radius) {
+        while !pending.is_empty() {
             self.best_n_within_step(
                 point,
                 self.size,
@@ -243,7 +254,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
         max_qty: usize,
         max_dist: A,
         distance: &F,
-        pending: &mut BinaryHeap<HeapElement<A, &'b Self>>,
+        pending: &mut Vec<HeapElement<A, &'b Self>>,
         evaluated: &mut BinaryHeap<T>,
     ) where
         F: Fn(&[A], &[A]) -> A,
@@ -251,6 +262,9 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
     {
         let mut curr = &*pending.pop().unwrap().element;
         debug_assert!(evaluated.len() <= num);
+        
+        // TODO: ensure that self.distance_to_space_scratch_vec gets initialised by serde so it does not need to be optional
+        let mut scratch_vec = self.distance_to_space_scratch_vec.as_ref().unwrap().borrow_mut();
 
         while !curr.is_leaf() {
             let candidate;
@@ -261,12 +275,14 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 candidate = curr.left.as_ref().unwrap();
                 curr = curr.right.as_ref().unwrap();
             }
-            let candidate_to_space = util::distance_to_space(
+            
+            let candidate_to_space = util::distance_to_space_noalloc(
                 point,
                 &*candidate.min_bounds,
                 &*candidate.max_bounds,
                 distance,
-                self.dimensions
+                self.dimensions,
+                &mut scratch_vec,
             );
             if candidate_to_space <= max_dist {
                 pending.push(HeapElement {

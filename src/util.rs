@@ -18,6 +18,25 @@ where
     distance(p1, &p2[..])
 }
 
+pub fn distance_to_space_noalloc<F, T>(p1: &[T], min_bounds: &[T], max_bounds: &[T], distance: &F, dimensions: usize, scratch: &mut Vec<T>) -> T
+where
+    F: Fn(&[T], &[T]) -> T,
+    T: Float,
+{
+    scratch.fill(T::nan());
+    
+    for i in 0..dimensions {
+        if p1[i] > max_bounds[i] {
+            scratch[i] = max_bounds[i];
+        } else if p1[i] < min_bounds[i] {
+            scratch[i] = min_bounds[i];
+        } else {
+            scratch[i] = p1[i];
+        }
+    }
+    distance(p1, &scratch[..])
+}
+
 #[cfg(test)]
 mod tests {
     use super::distance_to_space;
