@@ -6,23 +6,6 @@ use num_traits::{Float, One, Zero};
 use crate::heap_element::HeapElement;
 use crate::util;
 
-// TODO: get this working
-/*
-use std::alloc::{alloc_zeroed, dealloc, GlobalAlloc, System, Layout};
-struct ZeroedAllocator;
-unsafe impl GlobalAlloc for ZeroedAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        alloc_zeroed(layout)
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        dealloc(ptr, layout)
-    }
-}
-#[global_allocator]
-static GLOBAL: ZeroedAllocator = ZeroedAllocator;
-*/
-
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct KdTree<A, T: std::cmp::PartialEq, U: AsRef<[A]>+ std::cmp::PartialEq> {
@@ -42,7 +25,7 @@ pub struct KdTree<A, T: std::cmp::PartialEq, U: AsRef<[A]>+ std::cmp::PartialEq>
     points: Option<Vec<U>>,
     bucket: Option<Vec<T>>,
     
-    #[serde(skip_deserializing)]
+    #[cfg_attr(feature = "serialize", serde(skip))]
     // TODO: this is per-node. only really need per-tree
     distance_to_space_scratch_vec: Option<RefCell<Vec<A>>>,
 }
@@ -52,6 +35,7 @@ pub enum ErrorKind {
     WrongDimension,
     NonFiniteCoordinate,
     ZeroCapacity,
+    Empty
 }
 
 // TODO: use the zeroed allocator when allocating points. For points on a unit sphere, we can allocate
@@ -138,6 +122,43 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             .take(num)
             .map(Into::into)
             .collect())
+    }
+
+    pub fn nearest_one<F>(
+        &self,
+        point: &[A],
+        distance: &F,
+    ) -> Result<(A, &T), ErrorKind>
+        where
+            F: Fn(&[A], &[A]) -> A,
+    {
+        if self.size == 0 {
+            return Err(ErrorKind::Empty);
+        }
+        self.check_point(point)?;
+
+        let mut pending = Vec::with_capacity(16);
+
+        let mut best_dist: A = A::infinity();
+        let mut best_elem: Option<&T> = None;
+
+        pending.push(HeapElement {
+            distance: A::zero(),
+            element: self,
+        });
+        while !pending.is_empty()
+            && (best_elem.is_none()
+            || (pending[0].distance > best_dist))
+        {
+            self.nearest_one_step(
+                point,
+                distance,
+                &mut pending,
+                &mut best_dist,
+                &mut best_elem
+            );
+        }
+        Ok((best_dist, best_elem.unwrap()))
     }
 
     pub fn within<F>(&self, point: &[A], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
@@ -338,6 +359,9 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             max_dist
         };
 
+        // TODO: ensure that self.distance_to_space_scratch_vec gets initialised by serde so it does not need to be optional
+        let mut scratch_vec = self.distance_to_space_scratch_vec.as_ref().unwrap().borrow_mut();
+
         while !curr.is_leaf() {
             let candidate;
             if curr.belongs_in_left(point) {
@@ -347,12 +371,13 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 candidate = curr.left.as_ref().unwrap();
                 curr = curr.right.as_ref().unwrap();
             }
-            let candidate_to_space = util::distance_to_space(
+            let candidate_to_space = util::distance_to_space_noalloc(
                 point,
                 &*candidate.min_bounds,
                 &*candidate.max_bounds,
                 distance,
-                self.dimensions
+                self.dimensions,
+                &mut scratch_vec
             );
             if candidate_to_space <= evaluated_dist {
                 pending.push(HeapElement {
@@ -372,15 +397,68 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             if element <= max_dist {
                 if evaluated.len() < num {
                     evaluated.push(element);
-                // } else if element < *evaluated.peek().unwrap() {
-                //     evaluated.pop();
-                //     evaluated.push(element);
                 } else {
                     let mut top = evaluated.peek_mut().unwrap();
                     if element < *top {
                         *top = element;
                     }
                 }
+            }
+        }
+    }
+
+    fn nearest_one_step<'b, F>(
+        &self,
+        point: &[A],
+        distance: &F,
+        pending: &mut Vec<HeapElement<A, &'b Self>>,
+        best_dist: &mut A,
+        best_elem: &mut Option<&'b T>,
+    ) where
+        F: Fn(&[A], &[A]) -> A,
+    {
+        let mut curr = &*pending.pop().unwrap().element;
+
+        let evaluated_dist = *best_dist;
+
+        // TODO: ensure that self.distance_to_space_scratch_vec gets initialised by serde so it does not need to be optional
+        let mut scratch_vec = self.distance_to_space_scratch_vec.as_ref().unwrap().borrow_mut();
+
+        while !curr.is_leaf() {
+            let candidate;
+            if curr.belongs_in_left(point) {
+                candidate = curr.right.as_ref().unwrap();
+                curr = curr.left.as_ref().unwrap();
+            } else {
+                candidate = curr.left.as_ref().unwrap();
+                curr = curr.right.as_ref().unwrap();
+            }
+            let candidate_to_space = util::distance_to_space_noalloc(
+                point,
+                &*candidate.min_bounds,
+                &*candidate.max_bounds,
+                distance,
+                self.dimensions,
+                &mut scratch_vec
+            );
+            if candidate_to_space <= evaluated_dist {
+                pending.push(HeapElement {
+                    distance: candidate_to_space * -A::one(),
+                    element: &**candidate,
+                });
+            }
+        }
+
+        let points = curr.points.as_ref().unwrap().iter();
+        let bucket = curr.bucket.as_ref().unwrap().iter();
+        let iter = points.zip(bucket).map(|(p, d)| HeapElement {
+            distance: distance(point, p.as_ref()),
+            element: d,
+        });
+        for element in iter {
+            if best_elem.is_none() || element < *best_dist {
+                *best_elem = Some(element.element);
+                *best_dist = element.distance;
             }
         }
     }
@@ -718,6 +796,7 @@ impl std::error::Error for ErrorKind {
             ErrorKind::WrongDimension => "wrong dimension",
             ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
             ErrorKind::ZeroCapacity => "zero capacity",
+            ErrorKind::Empty => "invalid operation on empty tree",
         }
     }
 }

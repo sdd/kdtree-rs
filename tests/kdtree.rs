@@ -51,6 +51,15 @@ fn it_works() {
     );
 
     assert_eq!(
+        kdtree.nearest_one(&POINT_A.0, &squared_euclidean).unwrap(),
+        (0f64, &0)
+    );
+    assert_eq!(
+        kdtree.nearest_one(&POINT_B.0, &squared_euclidean).unwrap(),
+        (0f64, &1)
+    );
+
+    assert_eq!(
         kdtree.within(&POINT_A.0, 0.0, &squared_euclidean).unwrap(),
         vec![(0.0, &0)]
     );
@@ -126,6 +135,14 @@ fn it_works_with_vec() {
     assert_eq!(
         kdtree.nearest(&POINT_B.0, 4, &squared_euclidean).unwrap(),
         vec![(0f64, &1), (2f64, &0), (2f64, &2), (8f64, &3)]
+    );
+    assert_eq!(
+        kdtree.nearest_one(&POINT_A.0, &squared_euclidean).unwrap(),
+        (0f64, &0)
+    );
+    assert_eq!(
+        kdtree.nearest_one(&POINT_B.0, &squared_euclidean).unwrap(),
+        (0f64, &1)
     );
 }
 

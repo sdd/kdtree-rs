@@ -120,6 +120,42 @@ fn bench_nearest_from_kdtree_with_150k_3d_points_squared_euclidean(b: &mut Bench
 }
 
 #[bench]
+fn bench_nearest_with_1_from_kdtree_with_150k_3d_points_squared_euclidean(b: &mut Bencher) {
+    let len = 150000usize;
+    let point = rand_sphere_data();
+    let mut points = vec![];
+    let mut kdtree = KdTree::with_capacity(3, 16);
+
+    for _ in 0..len {
+        points.push(rand_sphere_data());
+    }
+
+    for i in 0..points.len() {
+        kdtree.add(&points[i].0, points[i].1).unwrap();
+    }
+
+    b.iter(|| kdtree.nearest(&point.0, 1, &squared_euclidean).unwrap());
+}
+
+#[bench]
+fn bench_nearest_one_from_kdtree_with_150k_3d_points_squared_euclidean(b: &mut Bencher) {
+    let len = 150000usize;
+    let point = rand_sphere_data();
+    let mut points = vec![];
+    let mut kdtree = KdTree::with_capacity(3, 16);
+
+    for _ in 0..len {
+        points.push(rand_sphere_data());
+    }
+
+    for i in 0..points.len() {
+        kdtree.add(&points[i].0, points[i].1).unwrap();
+    }
+
+    b.iter(|| kdtree.nearest_one(&point.0, &squared_euclidean).unwrap());
+}
+
+#[bench]
 fn bench_best_n_within_150k_3d_squared_euclidean(b: &mut Bencher) {
     let len = 150000usize;
     let point = rand_sphere_data();
