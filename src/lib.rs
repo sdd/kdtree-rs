@@ -1,4 +1,7 @@
 #![feature(allocator_api)]
+#![feature(const_generics)]
+#![feature(destructuring_assignment)]
+
 //! # kdtree
 //!
 //! K-dimensional tree for Rust (bucket point-region implementation)
@@ -15,8 +18,7 @@
 //! let c: ([f64; 2], usize) = ([2f64, 2f64], 2);
 //! let d: ([f64; 2], usize) = ([3f64, 3f64], 3);
 //!
-//! let dimensions = 2;
-//! let mut kdtree = KdTree::new(dimensions);
+//! let mut kdtree = KdTree::new().unwrap();
 //!
 //! kdtree.add(&a.0, a.1).unwrap();
 //! kdtree.add(&b.0, b.1).unwrap();

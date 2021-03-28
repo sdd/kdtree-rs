@@ -9,7 +9,7 @@ extern crate num_traits;
 extern crate aligned;
 
 use rand::distributions::{UnitSphereSurface, Distribution};
-use kdtree::distance::{squared_euclidean, dot_product, dot_product_sse};
+use kdtree::distance::{squared_euclidean, dot_product, dot_product_sse, dot_product_sse_aligned};
 use kdtree::KdTree;
 use test::Bencher;
 use num_traits::{FromPrimitive};
@@ -76,7 +76,7 @@ fn bench_add_to_kdtree_with_1k_3d_points(b: &mut Bencher) {
     let len = 1000usize;
     let point = rand_data();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
     for _ in 0..len {
         points.push(rand_data());
     }
@@ -91,7 +91,7 @@ fn bench_nearest_from_kdtree_with_1k_3d_points(b: &mut Bencher) {
     let len = 100000usize;
     let point = rand_data();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
     for _ in 0..len {
         points.push(rand_data());
     }
@@ -106,7 +106,7 @@ fn bench_nearest_from_kdtree_with_150k_3d_points_squared_euclidean(b: &mut Bench
     let len = 150000usize;
     let point = rand_sphere_data();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
 
     for _ in 0..len {
         points.push(rand_sphere_data());
@@ -124,7 +124,7 @@ fn bench_nearest_with_1_from_kdtree_with_150k_3d_points_squared_euclidean(b: &mu
     let len = 150000usize;
     let point = rand_sphere_data();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
 
     for _ in 0..len {
         points.push(rand_sphere_data());
@@ -142,7 +142,7 @@ fn bench_nearest_one_from_kdtree_with_150k_3d_points_squared_euclidean(b: &mut B
     let len = 150000usize;
     let point = rand_sphere_data();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
 
     for _ in 0..len {
         points.push(rand_sphere_data());
@@ -160,7 +160,7 @@ fn bench_best_n_within_150k_3d_squared_euclidean(b: &mut Bencher) {
     let len = 150000usize;
     let point = rand_sphere_data();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
 
     for _ in 0..len {
         points.push(rand_sphere_data());
@@ -178,7 +178,7 @@ fn bench_nearest_from_kdtree_with_150k_3d_points_dot_product(b: &mut Bencher) {
     let len = 150000usize;
     let point = rand_sphere_data_f32();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
 
     for _ in 0..len {
         points.push(rand_sphere_data_f32());
@@ -197,7 +197,7 @@ fn bench_nearest_from_kdtree_with_150k_3d_points_dot_product_sse(b: &mut Bencher
     let len = 150000usize;
     let point = rand_sphere_data_f32();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
 
     for _ in 0..len {
         points.push(rand_sphere_data_f32());
@@ -217,7 +217,7 @@ fn bench_nearest_from_kdtree_with_150k_3d_points_dot_product_sse_aligned(b: &mut
     let len = 150000usize;
     let point = rand_sphere_data_f32_qw();
     let mut points = vec![];
-    let mut kdtree = KdTree::with_capacity(3, 16);
+    let mut kdtree = KdTree::with_capacity(16).unwrap();
 
     for _ in 0..len {
         points.push(rand_sphere_data_f32_qw());
@@ -228,5 +228,5 @@ fn bench_nearest_from_kdtree_with_150k_3d_points_dot_product_sse_aligned(b: &mut
     }
 
     println!("calling nearest");
-    b.iter(|| kdtree.nearest(&point.0, 50000, &dot_product_sse).unwrap());
+    b.iter(|| kdtree.nearest(&point.0, 50000, &dot_product_sse_aligned).unwrap());
 }

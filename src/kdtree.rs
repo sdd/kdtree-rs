@@ -1,5 +1,4 @@
 use std::collections::BinaryHeap;
-use std::cell::RefCell;
 
 use num_traits::{Float, One, Zero};
 
@@ -8,101 +7,93 @@ use crate::util;
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
-pub struct KdTree<A, T: std::cmp::PartialEq, U: AsRef<[A]>+ std::cmp::PartialEq> {
-    // node
-    left: Option<Box<KdTree<A, T, U>>>,
-    right: Option<Box<KdTree<A, T, U>>>,
-    // common
-    dimensions: usize,
-    capacity: usize,
+pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
     size: usize,
-    min_bounds: Box<[A]>,
-    max_bounds: Box<[A]>,
-    // stem
-    split_value: Option<A>,
-    split_dimension: Option<usize>,
-    // leaf
-    points: Option<Vec<U>>,
-    bucket: Option<Vec<T>>,
-    
-    #[cfg_attr(feature = "serialize", serde(skip))]
-    // TODO: this is per-node. only really need per-tree
-    distance_to_space_scratch_vec: Option<RefCell<Vec<A>>>,
+    min_bounds: [A; K],
+    max_bounds: [A; K],
+    content: Node<A, T, K>,
+}
+
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug)]
+pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
+    Stem {
+        left: Box<KdTree<A, T, K>>,
+        right: Box<KdTree<A, T, K>>,
+        split_value: A,
+        split_dimension: u8,
+    },
+    Leaf {
+        points: Vec<[A; K]>,
+        bucket: Vec<T>,
+        capacity: usize,
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
-    WrongDimension,
     NonFiniteCoordinate,
     ZeroCapacity,
     Empty
 }
 
-// TODO: use the zeroed allocator when allocating points. For points on a unit sphere, we can allocate
-//       128bit aligned [f32; 3]'s (this should leave an empty 0 f32 in between each f32x3, assuming that
-//       32 0's is an f32 0!. this can be cast to a __m128 packed f32x4 that we can then do a SIMD
-//       dot product on instead of a squared euclidean. We would have to invert the distance comparison
-//       as a higher valued DP between vecs on a unit sphere indicates smaller distance. This
-//       should be significantly faster than sq_euclidean if the alignment can be done correctly and
-//       the unused fourth element contains a 0f32.
-
-impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::PartialEq> KdTree<A, T, U> {
-    pub fn new(dims: usize) -> Self {
-        KdTree::with_capacity(dims, 2_usize.pow(4))
+impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T, K> {
+    pub fn new() -> Result<Self, ErrorKind> {
+        KdTree::with_capacity(2_usize.pow(4))
     }
 
-    pub fn with_capacity(dimensions: usize, capacity: usize) -> Self {
-        let min_bounds = vec![A::infinity(); dimensions];
-        let max_bounds = vec![A::neg_infinity(); dimensions];
-        KdTree {
-            left: None,
-            right: None,
-            dimensions,
-            capacity,
-            size: 0,
-            min_bounds: min_bounds.into_boxed_slice(),
-            max_bounds: max_bounds.into_boxed_slice(),
-            split_value: None,
-            split_dimension: None,
-            points: Some(Vec::with_capacity(capacity)),
-            //points: Some(Vec::with_capacity_in(capacity, ZeroedAllocator)),
-            //bucket: Some(vec![]),
-            bucket: Some(Vec::with_capacity(capacity)),
-            
-            distance_to_space_scratch_vec: Some(RefCell::new(vec![A::nan(); dimensions])),
+    pub fn with_capacity(capacity: usize) -> Result<Self, ErrorKind> {
+        if capacity == 0 {
+            return Err(ErrorKind::ZeroCapacity);
         }
+
+        Ok(KdTree {
+            size: 0,
+            min_bounds: [A::infinity(); K],
+            max_bounds: [A::neg_infinity(); K],
+            content: Node::Leaf {
+                points: Vec::with_capacity(capacity),
+                bucket: Vec::with_capacity(capacity),
+                capacity,
+            },
+        })
     }
 
     pub fn size(&self) -> usize {
         self.size
     }
-    
-    pub fn allocate_dist_scratch(&mut self) {
-        self.distance_to_space_scratch_vec = Some(RefCell::new(vec![A::nan(); self.dimensions]));
+
+    pub fn is_leaf(&self) -> bool {
+        match &self.content {
+            Node::Leaf { .. } => true,
+            Node::Stem { .. } => false
+        }
     }
 
     pub fn nearest<F>(
         &self,
-        point: &[A],
+        point: &[A; K],
         num: usize,
         distance: &F,
     ) -> Result<Vec<(A, &T)>, ErrorKind>
     where
-        F: Fn(&[A], &[A]) -> A,
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
-        if let Err(err) = self.check_point(point) {
-            return Err(err);
-        }
+        self.check_point(point)?;
+
         let num = std::cmp::min(num, self.size);
         if num == 0 {
             return Ok(vec![]);
         }
+
         let mut pending = BinaryHeap::new();
         let mut evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
+
         pending.push(HeapElement {
             distance: A::zero(),
             element: self,
         });
+
         while !pending.is_empty()
             && (evaluated.len() < num
                 || (-pending.peek().unwrap().distance <= evaluated.peek().unwrap().distance))
@@ -116,6 +107,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 &mut evaluated,
             );
         }
+
         Ok(evaluated
             .into_sorted_vec()
             .into_iter()
@@ -126,11 +118,11 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
 
     pub fn nearest_one<F>(
         &self,
-        point: &[A],
+        point: &[A; K],
         distance: &F,
     ) -> Result<(A, &T), ErrorKind>
         where
-            F: Fn(&[A], &[A]) -> A,
+            F: Fn(&[A; K], &[A; K]) -> A,
     {
         if self.size == 0 {
             return Err(ErrorKind::Empty);
@@ -146,6 +138,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             distance: A::zero(),
             element: self,
         });
+
         while !pending.is_empty()
             && (best_elem.is_none()
             || (pending[0].distance > best_dist))
@@ -158,25 +151,28 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 &mut best_elem
             );
         }
+
         Ok((best_dist, best_elem.unwrap()))
     }
 
-    pub fn within<F>(&self, point: &[A], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
+    pub fn within<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
     where
-        F: Fn(&[A], &[A]) -> A,
+        F: Fn(&[A;  K], &[A;  K]) -> A,
     {
-        if let Err(err) = self.check_point(point) {
-            return Err(err);
-        }
+        self.check_point(point)?;
+
         if self.size == 0 {
             return Ok(vec![]);
         }
+
         let mut pending = BinaryHeap::new();
         let mut evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
+
         pending.push(HeapElement {
             distance: A::zero(),
             element: self,
         });
+
         while !pending.is_empty() && (-pending.peek().unwrap().distance <= radius) {
             self.nearest_step(
                 point,
@@ -187,6 +183,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 &mut evaluated,
             );
         }
+
         Ok(evaluated
             .into_sorted_vec()
             //.into_vec()
@@ -195,9 +192,9 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             .collect())
     }
 
-    pub fn best_n_within_into_iter<F>(&self, point: &[A], radius: A, max_qty: usize, distance: &F) -> impl Iterator<Item = T>
+    pub fn best_n_within_into_iter<F>(&self, point: &[A; K], radius: A, max_qty: usize, distance: &F) -> impl Iterator<Item = T>
         where
-            F: Fn(&[A], &[A]) -> A,
+            F: Fn(&[A;  K], &[A;  K]) -> A,
             T: Copy + Ord
     {
         // if let Err(err) = self.check_point(point) {
@@ -230,17 +227,16 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
         evaluated.into_iter()
     }
 
-    pub fn best_n_within<F>(&self, point: &[A], radius: A, max_qty: usize, distance: &F) -> Result<Vec<T>, ErrorKind>
+    pub fn best_n_within<F>(&self, point: &[A;  K], radius: A, max_qty: usize, distance: &F) -> Result<Vec<T>, ErrorKind>
         where
-            F: Fn(&[A], &[A]) -> A,
+            F: Fn(&[A;  K], &[A;  K]) -> A,
             T: Copy + Ord
     {
-        if let Err(err) = self.check_point(point) {
-            return Err(err);
-        }
         if self.size == 0 {
             return Ok(vec![]);
         }
+
+        self.check_point(point)?;
 
         let mut pending = Vec::with_capacity(max_qty);
         let mut evaluated = BinaryHeap::<T>::new();
@@ -270,7 +266,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
 
     fn best_n_within_step<'b, F>(
         &self,
-        point: &[A],
+        point: &[A; K],
         num: usize,
         max_qty: usize,
         max_dist: A,
@@ -278,33 +274,27 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
         pending: &mut Vec<HeapElement<A, &'b Self>>,
         evaluated: &mut BinaryHeap<T>,
     ) where
-        F: Fn(&[A], &[A]) -> A,
+        F: Fn(&[A;  K], &[A;  K]) -> A,
         T: Copy + Ord
     {
         let mut curr = &*pending.pop().unwrap().element;
         debug_assert!(evaluated.len() <= num);
-        
-        // TODO: ensure that self.distance_to_space_scratch_vec gets initialised by serde so it does not need to be optional
-        let mut scratch_vec = self.distance_to_space_scratch_vec.as_ref().unwrap().borrow_mut();
 
-        while !curr.is_leaf() {
+        while let Node::Stem {left, right, .. } = &curr.content {
             let candidate;
-            if curr.belongs_in_left(point) {
-                candidate = curr.right.as_ref().unwrap();
-                curr = curr.left.as_ref().unwrap();
+            (candidate, curr) = if curr.belongs_in_left(point) {
+                (right, left)
             } else {
-                candidate = curr.left.as_ref().unwrap();
-                curr = curr.right.as_ref().unwrap();
-            }
-            
-            let candidate_to_space = util::distance_to_space_noalloc(
+                (left, right)
+            };
+
+            let candidate_to_space = util::distance_to_space(
                 point,
-                &*candidate.min_bounds,
-                &*candidate.max_bounds,
-                distance,
-                self.dimensions,
-                &mut scratch_vec,
+                &candidate.min_bounds,
+                &candidate.max_bounds,
+                distance
             );
+
             if candidate_to_space <= max_dist {
                 pending.push(HeapElement {
                     distance: candidate_to_space * -A::one(),
@@ -313,73 +303,64 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             }
         }
 
-        let points = curr.points.as_ref().unwrap().iter();
-        let bucket = curr.bucket.as_ref().unwrap().iter();
-        let iter = points.zip(bucket).map(|(p, d)| HeapElement {
-            distance: distance(point, p.as_ref()),
-            element: d,
-        });
+        match &curr.content {
+            Node::Leaf {points, bucket, .. } => {
 
-        for element in iter {
-            if element <= max_dist {
-                if evaluated.len() < max_qty {
-                    evaluated.push(*element.element);
-                } else {
-                    // evaluated.pop();
-                    // evaluated.push(*element.element);
-                    //
-                    let mut top = evaluated.peek_mut().unwrap();
-                    if element.element < &top {
-                        *top = *element.element;
+                let points = points.iter();
+                let bucket = bucket.iter();
+                let iter = points.zip(bucket).map(|(p, d)| HeapElement {
+                    distance: distance(point, p),
+                    element: d,
+                });
+
+                for element in iter {
+                    if element <= max_dist {
+                        if evaluated.len() < max_qty {
+                            evaluated.push(*element.element);
+                        } else {
+                            let mut top = evaluated.peek_mut().unwrap();
+                            if element.element < &top {
+                                *top = *element.element;
+                            }
+                        }
                     }
                 }
-            }
+            },
+            Node::Stem { .. } => unreachable!()
         }
     }
 
     fn nearest_step<'b, F>(
         &self,
-        point: &[A],
+        point: &[A; K],
         num: usize,
         max_dist: A,
         distance: &F,
         pending: &mut BinaryHeap<HeapElement<A, &'b Self>>,
         evaluated: &mut BinaryHeap<HeapElement<A, &'b T>>,
     ) where
-        F: Fn(&[A], &[A]) -> A,
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
-        let mut curr = &*pending.pop().unwrap().element;
         debug_assert!(evaluated.len() <= num);
-        let evaluated_dist = if evaluated.len() == num {
-            // We only care about the nearest `num` points, so if we already have `num` points,
-            // any more point we add to `evaluated` must be nearer then one of the point already in
-            // `evaluated`.
-            max_dist.min(evaluated.peek().unwrap().distance)
-        } else {
-            max_dist
-        };
 
-        // TODO: ensure that self.distance_to_space_scratch_vec gets initialised by serde so it does not need to be optional
-        let mut scratch_vec = self.distance_to_space_scratch_vec.as_ref().unwrap().borrow_mut();
+        let mut curr = &*pending.pop().unwrap().element;
 
-        while !curr.is_leaf() {
+        while let Node::Stem {left, right, .. } = &curr.content {
             let candidate;
-            if curr.belongs_in_left(point) {
-                candidate = curr.right.as_ref().unwrap();
-                curr = curr.left.as_ref().unwrap();
+            (candidate, curr) = if curr.belongs_in_left(point) {
+                (right, left)
             } else {
-                candidate = curr.left.as_ref().unwrap();
-                curr = curr.right.as_ref().unwrap();
-            }
-            let candidate_to_space = util::distance_to_space_noalloc(
+                (left, right)
+            };
+
+            let candidate_to_space = util::distance_to_space(
                 point,
-                &*candidate.min_bounds,
-                &*candidate.max_bounds,
-                distance,
-                self.dimensions,
-                &mut scratch_vec
+                &candidate.min_bounds,
+                &candidate.max_bounds,
+                distance
             );
-            if candidate_to_space <= evaluated_dist {
+
+            if candidate_to_space <= max_dist {
                 pending.push(HeapElement {
                     distance: candidate_to_space * -A::one(),
                     element: &**candidate,
@@ -387,60 +368,61 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             }
         }
 
-        let points = curr.points.as_ref().unwrap().iter();
-        let bucket = curr.bucket.as_ref().unwrap().iter();
-        let iter = points.zip(bucket).map(|(p, d)| HeapElement {
-            distance: distance(point, p.as_ref()),
-            element: d,
-        });
-        for element in iter {
-            if element <= max_dist {
-                if evaluated.len() < num {
-                    evaluated.push(element);
-                } else {
-                    let mut top = evaluated.peek_mut().unwrap();
-                    if element < *top {
-                        *top = element;
+        match &curr.content {
+            Node::Leaf { points, bucket, .. } => {
+                let points = points.iter();
+                let bucket = bucket.iter();
+                let iter = points.zip(bucket).map(|(p, d)| HeapElement {
+                    distance: distance(point, p),
+                    element: d,
+                });
+
+                for element in iter {
+                    if element <= max_dist {
+                        if evaluated.len() < num {
+                            evaluated.push(element);
+                        } else {
+                            let mut top = evaluated.peek_mut().unwrap();
+                            if element < *top {
+                                *top = element;
+                            }
+                        }
                     }
                 }
-            }
+            },
+            Node::Stem { .. } => unreachable!()
         }
     }
 
     fn nearest_one_step<'b, F>(
         &self,
-        point: &[A],
+        point: &[A; K],
         distance: &F,
         pending: &mut Vec<HeapElement<A, &'b Self>>,
         best_dist: &mut A,
         best_elem: &mut Option<&'b T>,
     ) where
-        F: Fn(&[A], &[A]) -> A,
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
         let mut curr = &*pending.pop().unwrap().element;
 
         let evaluated_dist = *best_dist;
 
-        // TODO: ensure that self.distance_to_space_scratch_vec gets initialised by serde so it does not need to be optional
-        let mut scratch_vec = self.distance_to_space_scratch_vec.as_ref().unwrap().borrow_mut();
-
-        while !curr.is_leaf() {
+        while let Node::Stem {left, right, .. } = &curr.content {
             let candidate;
-            if curr.belongs_in_left(point) {
-                candidate = curr.right.as_ref().unwrap();
-                curr = curr.left.as_ref().unwrap();
+            (candidate, curr) = if curr.belongs_in_left(point) {
+                (right, left)
             } else {
-                candidate = curr.left.as_ref().unwrap();
-                curr = curr.right.as_ref().unwrap();
-            }
-            let candidate_to_space = util::distance_to_space_noalloc(
+                (left, right)
+            };
+
+            let candidate_to_space = util::distance_to_space(
                 point,
-                &*candidate.min_bounds,
-                &*candidate.max_bounds,
-                distance,
-                self.dimensions,
-                &mut scratch_vec
+                &candidate.min_bounds,
+                &candidate.max_bounds,
+                distance
             );
+
             if candidate_to_space <= evaluated_dist {
                 pending.push(HeapElement {
                     distance: candidate_to_space * -A::one(),
@@ -449,140 +431,119 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
             }
         }
 
-        let points = curr.points.as_ref().unwrap().iter();
-        let bucket = curr.bucket.as_ref().unwrap().iter();
-        let iter = points.zip(bucket).map(|(p, d)| HeapElement {
-            distance: distance(point, p.as_ref()),
-            element: d,
-        });
-        for element in iter {
-            if best_elem.is_none() || element < *best_dist {
-                *best_elem = Some(element.element);
-                *best_dist = element.distance;
-            }
+        match &curr.content {
+            Node::Leaf { points, bucket, .. } => {
+                let points = points.iter();
+                let bucket = bucket.iter();
+                let iter = points.zip(bucket).map(|(p, d)| HeapElement {
+                    distance: distance(point, p),
+                    element: d,
+                });
+
+                for element in iter {
+                    if best_elem.is_none() || element < *best_dist {
+                        *best_elem = Some(element.element);
+                        *best_dist = element.distance;
+                    }
+                }
+            },
+            Node::Stem { .. } => unreachable!()
         }
     }
 
     pub fn iter_nearest<'a, 'b, F>(
         &'b self,
-        point: &'a [A],
+        point: &'a [A; K],
         distance: &'a F,
-    ) -> Result<NearestIter<'a, 'b, A, T, U, F>, ErrorKind>
+    ) -> Result<NearestIter<'a, 'b, A, T, F, K>, ErrorKind>
     where
-        F: Fn(&[A], &[A]) -> A,
+        F: Fn( &[A; K],  &[A; K]) -> A,
     {
-        if let Err(err) = self.check_point(point) {
-            return Err(err);
-        }
+        self.check_point(point)?;
+
         let mut pending = BinaryHeap::new();
         let evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
+
         pending.push(HeapElement {
             distance: A::zero(),
             element: self,
         });
+
         Ok(NearestIter {
             point,
             pending,
             evaluated,
-            distance,
-            dimensions: self.dimensions
+            distance
         })
     }
 
-    pub fn iter_nearest_mut<'a, 'b, F>(
-        &'b mut self,
-        point: &'a [A],
-        distance: &'a F,
-    ) -> Result<NearestIterMut<'a, 'b, A, T, U, F>, ErrorKind>
-    where
-        F: Fn(&[A], &[A]) -> A,
-    {
-        if let Err(err) = self.check_point(point) {
-            return Err(err);
-        }
-        let mut pending = BinaryHeap::new();
-        let evaluated = BinaryHeap::<HeapElement<A, &mut T>>::new();
-
-        let dimensions = self.dimensions;
-
-        pending.push(HeapElement {
-            distance: A::zero(),
-            element: self,
-        });
-        Ok(NearestIterMut {
-            point,
-            pending,
-            evaluated,
-            distance,
-            dimensions,
-        })
-    }
-
-    pub fn add(&mut self, point: U, data: T) -> Result<(), ErrorKind> {
-        if self.capacity == 0 {
-            return Err(ErrorKind::ZeroCapacity);
-        }
-        if let Err(err) = self.check_point(point.as_ref()) {
-            return Err(err);
-        }
+    pub fn add(&mut self, point: &[A; K], data: T) -> Result<(), ErrorKind> {
+        self.check_point(&point)?;
         self.add_unchecked(point, data)
     }
 
-    fn add_unchecked(&mut self, point: U, data: T) -> Result<(), ErrorKind> {
-        if self.is_leaf() {
-            self.add_to_bucket(point, data);
-            return Ok(());
-        }
-        self.extend(point.as_ref());
-        self.size += 1;
-        let next = if self.belongs_in_left(point.as_ref()) {
-            self.left.as_mut()
-        } else {
-            self.right.as_mut()
-        };
-        next.unwrap().add_unchecked(point, data)
-    }
+    fn add_unchecked(&mut self, point: &[A; K], data: T) -> Result<(), ErrorKind> {
+        let res = match &mut self.content {
+            Node::Leaf { .. } => {
+                self.add_to_bucket(&point, data);
+                return Ok(())
+            },
 
-    fn add_to_bucket(&mut self, point: U, data: T) {
-        self.extend(point.as_ref());
-        let mut points = self.points.take().unwrap();
-        let mut bucket = self.bucket.take().unwrap();
-        points.push(point);
-        bucket.push(data);
-        self.size += 1;
-        if self.size > self.capacity {
-            self.split(points, bucket);
-        } else {
-            self.points = Some(points);
-            self.bucket = Some(bucket);
-        }
-    }
-
-    pub fn remove(&mut self, point: &U, data: &T) -> Result<usize, ErrorKind> {
-        let mut removed = 0;
-        if let Err(err) = self.check_point(point.as_ref()) {
-            return Err(err);
-        }
-        if let (Some(mut points), Some(mut bucket)) = (self.points.take(), self.bucket.take()) {
-            while let Some(p_index) = points.iter().position(|x| x == point) {
-                if &bucket[p_index] == data {
-                    points.remove(p_index);
-                    bucket.remove(p_index);
-                    removed += 1;
-                    self.size -= 1;
+            Node::Stem { ref mut left, ref mut right, split_dimension, split_value } => {
+                if point[*split_dimension as usize] < *split_value { // belongs_in_left
+                    left.add_unchecked(point, data)
+                } else {
+                    right.add_unchecked(point, data)
                 }
             }
-            self.points = Some(points);
-            self.bucket = Some(bucket);
-        } else {
-            if let Some(right) = self.right.as_mut() {
+        };
+
+        self.extend(&point);
+        self.size += 1;
+
+        res
+    }
+
+    fn add_to_bucket(&mut self, point: &[A; K], data: T) {
+        self.extend(&point);
+        let cap;
+        match &mut self.content {
+            Node::Leaf { ref mut points, ref mut bucket, capacity } => {
+                points.push(point.clone());
+                bucket.push(data);
+                cap = *capacity;
+            },
+            Node::Stem { .. } => unreachable!()
+        }
+
+        self.size += 1;
+        if self.size > cap {
+            self.split();
+        }
+    }
+
+    pub fn remove(&mut self, point: &[A; K], data: &T) -> Result<usize, ErrorKind> {
+        let mut removed = 0;
+        self.check_point(point)?;
+
+        match &mut self.content {
+            Node::Leaf { ref mut points, ref mut bucket, .. } => {
+                while let Some(p_index) = points.iter().position(|x| x == point) {
+                    if &bucket[p_index] == data {
+                        points.remove(p_index);
+                        bucket.remove(p_index);
+                        removed += 1;
+                        self.size -= 1;
+                    }
+                }
+            },
+            Node::Stem { ref mut left, ref mut right, .. } => {
                 let right_removed = right.remove(point, data)?;
                 if right_removed > 0 {
                     self.size -= right_removed;
                     removed += right_removed;
                 }
-            }
-            if let Some(left) = self.left.as_mut() {
+
                 let left_removed = left.remove(point, data)?;
                 if left_removed > 0 {
                     self.size -= left_removed;
@@ -590,50 +551,63 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
                 }
             }
         }
+
         Ok(removed)
     }
 
-    fn split(&mut self, mut points: Vec<U>, mut bucket: Vec<T>) {
-        let mut max = A::zero();
-        for dim in 0..self.dimensions {
-            let diff = self.max_bounds[dim] - self.min_bounds[dim];
-            if !diff.is_nan() && diff > max {
-                max = diff;
-                self.split_dimension = Some(dim);
-            }
+    fn split(&mut self) {
+        match &mut self.content {
+            Node::Leaf { ref mut bucket, ref mut points, capacity, .. } => {
+                let mut split_dimension: Option<usize> = None;
+                let mut max = A::zero();
+                for dim in 0..K {
+                    let diff = self.max_bounds[dim] - self.min_bounds[dim];
+                    if !diff.is_nan() && diff > max {
+                        max = diff;
+                        split_dimension = Some(dim);
+                    }
+                }
+
+                if let Some(split_dimension) = split_dimension {
+                    let min = self.min_bounds[split_dimension];
+                    let max = self.max_bounds[split_dimension];
+                    let split_value = min + (max - min) / A::from(2.0).unwrap();
+
+                    let mut left = Box::new(KdTree::with_capacity(*capacity).unwrap());
+                    let mut right = Box::new(KdTree::with_capacity(*capacity).unwrap());
+
+                    while !points.is_empty() {
+                        let point = points.swap_remove(0);
+                        let data = bucket.swap_remove(0);
+                        if point[split_dimension] < split_value { // belongs_in_left
+                            left.add_to_bucket(&point, data);
+                        } else {
+                            right.add_to_bucket(&point, data);
+                        }
+                    }
+
+                    self.content = Node::Stem {
+                        left,
+                        right,
+                        split_value,
+                        split_dimension: split_dimension as u8
+                    }
+                }
+            },
+            Node::Stem { .. } => unreachable!()
         }
-        match self.split_dimension {
-            None => {
-                self.points = Some(points);
-                self.bucket = Some(bucket);
-                return;
-            }
-            Some(dim) => {
-                let min = self.min_bounds[dim];
-                let max = self.max_bounds[dim];
-                self.split_value = Some(min + (max - min) / A::from(2.0).unwrap());
-            }
-        };
-        let mut left = Box::new(KdTree::with_capacity(self.dimensions, self.capacity));
-        let mut right = Box::new(KdTree::with_capacity(self.dimensions, self.capacity));
-        while !points.is_empty() {
-            let point = points.swap_remove(0);
-            let data = bucket.swap_remove(0);
-            if self.belongs_in_left(point.as_ref()) {
-                left.add_to_bucket(point, data);
-            } else {
-                right.add_to_bucket(point, data);
-            }
-        }
-        self.left = Some(left);
-        self.right = Some(right);
     }
 
-    fn belongs_in_left(&self, point: &[A]) -> bool {
-        point[self.split_dimension.unwrap()] < self.split_value.unwrap()
+    fn belongs_in_left(&self, point: &[A; K]) -> bool {
+        match &self.content {
+            Node::Stem { ref split_dimension, ref split_value, .. } => {
+                point[*split_dimension as usize] < *split_value
+            },
+            Node::Leaf { .. } => unreachable!()
+        }
     }
 
-    fn extend(&mut self, point: &[A]) {
+    fn extend(&mut self,  point: &[A; K]) {
         let min = self.min_bounds.iter_mut();
         let max = self.max_bounds.iter_mut();
         for ((l, h), v) in min.zip(max).zip(point.iter()) {
@@ -646,21 +620,12 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, U: AsRef<[A]> + std::cmp::Pa
         }
     }
 
-    fn is_leaf(&self) -> bool {
-        self.split_dimension.is_none()
-    }
-
-    fn check_point(&self, point: &[A]) -> Result<(), ErrorKind> {
-        //if self.dimensions != point.len() {
-        if self.dimensions > point.len() {
-            return Err(ErrorKind::WrongDimension);
+    fn check_point(&self, point: &[A;  K]) -> Result<(), ErrorKind> {
+        if point.iter().all(|n|n.is_finite()) {
+            Ok(())
+        } else {
+            Err(ErrorKind::NonFiniteCoordinate)
         }
-        for n in point {
-            if !n.is_finite() {
-                return Err(ErrorKind::NonFiniteCoordinate);
-            }
-        }
-        Ok(())
     }
 }
 
@@ -669,20 +634,19 @@ pub struct NearestIter<
     'b,
     A: 'a + 'b + Float,
     T: 'b + PartialEq,
-    U: 'b + AsRef<[A]> + std::cmp::PartialEq,
-    F: 'a + Fn(&[A], &[A]) -> A,
+    F: 'a + Fn(&[A; K], &[A; K]) -> A,
+    const K: usize,
 > {
-    point: &'a [A],
-    pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, U>>>,
+    point: &'a [A; K],
+    pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, K>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b T>>,
-    distance: &'a F,
-    dimensions: usize
+    distance: &'a F
 }
 
-impl<'a, 'b, A: Float + Zero + One, T: 'b, U: 'b + AsRef<[A]>, F: 'a> Iterator
-    for NearestIter<'a, 'b, A, T, U, F>
+impl<'a, 'b, A: Float + Zero + One, T: 'b, F: 'a, const K: usize> Iterator
+    for NearestIter<'a, 'b, A, T, F, K>
 where
-    F: Fn(&[A], &[A]) -> A, U: PartialEq, T: PartialEq
+    F: Fn(&[A;  K], &[A;  K]) -> A, T: PartialEq
 {
     type Item = (A, &'b T);
     fn next(&mut self) -> Option<(A, &'b T)> {
@@ -695,96 +659,38 @@ where
                 >= -self.pending.peek().unwrap().distance)
         {
             let mut curr = &*self.pending.pop().unwrap().element;
-            while !curr.is_leaf() {
+            while let Node::Stem { left, right, .. } = &curr.content {
                 let candidate;
-                if curr.belongs_in_left(point) {
-                    candidate = curr.right.as_ref().unwrap();
-                    curr = curr.left.as_ref().unwrap();
+                (candidate, curr) = if curr.belongs_in_left(point) {
+                    (right, left)
                 } else {
-                    candidate = curr.left.as_ref().unwrap();
-                    curr = curr.right.as_ref().unwrap();
-                }
+                    (left, right)
+                };
+
                 self.pending.push(HeapElement {
                     distance: -distance_to_space(
                         point,
-                        &*candidate.min_bounds,
-                        &*candidate.max_bounds,
-                        distance,
-                        self.dimensions
+                        &candidate.min_bounds,
+                        &candidate.max_bounds,
+                        distance
                     ),
                     element: &**candidate,
                 });
             }
-            let points = curr.points.as_ref().unwrap().iter();
-            let bucket = curr.bucket.as_ref().unwrap().iter();
-            self.evaluated
-                .extend(points.zip(bucket).map(|(p, d)| HeapElement {
-                    distance: -distance(point, p.as_ref()),
-                    element: d,
-                }));
-        }
-        self.evaluated.pop().map(|x| (-x.distance, x.element))
-    }
-}
 
-pub struct NearestIterMut<
-    'a,
-    'b,
-    A: 'a + 'b + Float,
-    T: 'b + PartialEq,
-    U: 'b + AsRef<[A]> + PartialEq,
-    F: 'a + Fn(&[A], &[A]) -> A,
-> {
-    point: &'a [A],
-    pending: BinaryHeap<HeapElement<A, &'b mut KdTree<A, T, U>>>,
-    evaluated: BinaryHeap<HeapElement<A, &'b mut T>>,
-    distance: &'a F,
-    dimensions: usize
-}
+            match &curr.content {
+                Node::Leaf { points, bucket, .. } => {
+                    let points = points.iter();
+                    let bucket = bucket.iter();
 
-impl<'a, 'b, A: Float + Zero + One, T: 'b, U: 'b + AsRef<[A]>, F: 'a> Iterator
-    for NearestIterMut<'a, 'b, A, T, U, F>
-where
-    F: Fn(&[A], &[A]) -> A, U: PartialEq, T: PartialEq
-{
-    type Item = (A, &'b mut T);
-    fn next(&mut self) -> Option<(A, &'b mut T)> {
-        use util::distance_to_space;
-
-        let distance = self.distance;
-        let point = self.point;
-        while !self.pending.is_empty()
-            && (self.evaluated.peek().map_or(A::infinity(), |x| -x.distance)
-                >= -self.pending.peek().unwrap().distance)
-        {
-            let mut curr = &mut *self.pending.pop().unwrap().element;
-            while !curr.is_leaf() {
-                let candidate;
-                if curr.belongs_in_left(point) {
-                    candidate = curr.right.as_mut().unwrap();
-                    curr = curr.left.as_mut().unwrap();
-                } else {
-                    candidate = curr.left.as_mut().unwrap();
-                    curr = curr.right.as_mut().unwrap();
-                }
-                self.pending.push(HeapElement {
-                    distance: -distance_to_space(
-                        point,
-                        &*candidate.min_bounds,
-                        &*candidate.max_bounds,
-                        distance,
-                        self.dimensions
-                    ),
-                    element: &mut **candidate,
-                });
+                    self.evaluated
+                        .extend(points.zip(bucket).map(|(p, d)| HeapElement {
+                            distance: -distance(point, &p),
+                            element: d,
+                        }));
+                },
+                Node::Stem { .. } => unreachable!()
             }
-            let points = curr.points.as_ref().unwrap().iter();
-            let bucket = curr.bucket.as_mut().unwrap().iter_mut();
-            self.evaluated
-                .extend(points.zip(bucket).map(|(p, d)| HeapElement {
-                    distance: -distance(point, p.as_ref()),
-                    element: d,
-                }));
         }
         self.evaluated.pop().map(|x| (-x.distance, x.element))
     }
@@ -793,7 +699,6 @@ where
 impl std::error::Error for ErrorKind {
     fn description(&self) -> &str {
         match *self {
-            ErrorKind::WrongDimension => "wrong dimension",
             ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
             ErrorKind::ZeroCapacity => "zero capacity",
             ErrorKind::Empty => "invalid operation on empty tree",
@@ -811,6 +716,7 @@ impl std::fmt::Display for ErrorKind {
 mod tests {
     extern crate rand;
     use super::KdTree;
+    use kdtree::Node;
 
     fn random_point() -> ([f64; 2], i32) {
         rand::random::<([f64; 2], i32)>()
@@ -818,46 +724,43 @@ mod tests {
 
     #[test]
     fn it_has_default_capacity() {
-        let tree: KdTree<f64, i32, [f64; 2]> = KdTree::new(2);
-        assert_eq!(tree.capacity, 2_usize.pow(4));
+        let tree: KdTree<f64, i32, 2> = KdTree::new().unwrap();
+        match &tree.content {
+            Node::Leaf { capacity, .. } => {
+                assert_eq!(*capacity, 2_usize.pow(4));
+            },
+            Node::Stem { .. } => unreachable!()
+        }
     }
 
     #[test]
     fn it_can_be_cloned() {
-        let mut tree: KdTree<f64, i32, [f64; 2]> = KdTree::new(2);
+        let mut tree: KdTree<f64, i32, 2> = KdTree::new().unwrap();
         let (pos, data) = random_point();
-        tree.add(pos, data).unwrap();
+        tree.add(&pos, data).unwrap();
         let mut cloned_tree = tree.clone();
-        cloned_tree.add(pos, data).unwrap();
+        cloned_tree.add(&pos, data).unwrap();
         assert_eq!(tree.size(), 1);
         assert_eq!(cloned_tree.size(), 2);
     }
 
     #[test]
     fn it_holds_on_to_its_capacity_before_splitting() {
-        let mut tree: KdTree<f64, i32, [f64; 2]> = KdTree::new(2);
+        let mut tree: KdTree<f64, i32, 2> = KdTree::new().unwrap();
         let capacity = 2_usize.pow(4);
         for _ in 0..capacity {
             let (pos, data) = random_point();
-            tree.add(pos, data).unwrap();
+            tree.add(&pos, data).unwrap();
         }
         assert_eq!(tree.size, capacity);
         assert_eq!(tree.size(), capacity);
-        assert!(tree.left.is_none() && tree.right.is_none());
+        assert!(tree.is_leaf());
         {
             let (pos, data) = random_point();
-            tree.add(pos, data).unwrap();
+            tree.add(&pos, data).unwrap();
         }
         assert_eq!(tree.size, capacity + 1);
         assert_eq!(tree.size(), capacity + 1);
-        assert!(tree.left.is_some() && tree.right.is_some());
-    }
-
-    #[test]
-    fn no_items_can_be_added_to_a_zero_capacity_kdtree() {
-        let mut tree: KdTree<f64, i32, [f64; 2]> = KdTree::with_capacity(2, 0);
-        let (pos, data) = random_point();
-        let res = tree.add(pos, data);
-        assert!(res.is_err());
+        assert!(!tree.is_leaf());
     }
 }

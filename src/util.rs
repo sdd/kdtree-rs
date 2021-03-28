@@ -1,12 +1,16 @@
 use num_traits::Float;
 
-pub fn distance_to_space<F, T>(p1: &[T], min_bounds: &[T], max_bounds: &[T], distance: &F, dimensions: usize) -> T
+pub fn distance_to_space<F, T, const K: usize>(
+    p1: &[T; K],
+    min_bounds: &[T; K],
+    max_bounds: &[T; K],
+    distance: &F) -> T
 where
-    F: Fn(&[T], &[T]) -> T,
+    F: Fn(&[T; K], &[T; K]) -> T,
     T: Float,
 {
-    let mut p2 = vec![T::nan(); p1.len()];
-    for i in 0..dimensions {
+    let mut p2 = [T::nan(); K];
+    for i in 0..K {
         if p1[i] > max_bounds[i] {
             p2[i] = max_bounds[i];
         } else if p1[i] < min_bounds[i] {
@@ -15,26 +19,7 @@ where
             p2[i] = p1[i];
         }
     }
-    distance(p1, &p2[..])
-}
-
-pub fn distance_to_space_noalloc<F, T>(p1: &[T], min_bounds: &[T], max_bounds: &[T], distance: &F, dimensions: usize, scratch: &mut Vec<T>) -> T
-where
-    F: Fn(&[T], &[T]) -> T,
-    T: Float,
-{
-    scratch.fill(T::nan());
-    
-    for i in 0..dimensions {
-        if p1[i] > max_bounds[i] {
-            scratch[i] = max_bounds[i];
-        } else if p1[i] < min_bounds[i] {
-            scratch[i] = min_bounds[i];
-        } else {
-            scratch[i] = p1[i];
-        }
-    }
-    distance(p1, &scratch[..])
+    distance(p1, &p2)
 }
 
 #[cfg(test)]
@@ -45,7 +30,7 @@ mod tests {
 
     #[test]
     fn test_normal_distance_to_space() {
-        let dis = distance_to_space(&[0.0, 0.0], &[1.0, 1.0], &[2.0, 2.0], &squared_euclidean, 2);
+        let dis = distance_to_space(&[0.0, 0.0], &[1.0, 1.0], &[2.0, 2.0], &squared_euclidean);
         assert_eq!(dis, 2.0);
     }
 
@@ -55,8 +40,7 @@ mod tests {
             &[0.0, 0.0],
             &[1.0, 1.0],
             &[INFINITY, INFINITY],
-            &squared_euclidean,
-            2
+            &squared_euclidean
         );
         assert_eq!(dis, 2.0);
     }
@@ -67,15 +51,14 @@ mod tests {
             &[2.0, 2.0],
             &[NEG_INFINITY, NEG_INFINITY],
             &[INFINITY, INFINITY],
-            &squared_euclidean,
-            2
+            &squared_euclidean
         );
         assert_eq!(dis, 0.0);
     }
 
     #[test]
     fn test_distance_inside_normal() {
-        let dis = distance_to_space(&[2.0, 2.0], &[0.0, 0.0], &[3.0, 3.0], &squared_euclidean, 2);
+        let dis = distance_to_space(&[2.0, 2.0], &[0.0, 0.0], &[3.0, 3.0], &squared_euclidean);
         assert_eq!(dis, 0.0);
     }
 
@@ -85,8 +68,7 @@ mod tests {
             &[-2.0, 0.0],
             &[0.0, NEG_INFINITY],
             &[INFINITY, INFINITY],
-            &squared_euclidean,
-            2
+            &squared_euclidean
         );
         assert_eq!(dis, 4.0);
     }
