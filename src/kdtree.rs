@@ -532,8 +532,7 @@ impl std::error::Error for ErrorKind {
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use std::error::Error;
-        write!(f, "KdTree error: {}", self.description())
+        write!(f, "KdTree error: {}", self)
     }
 }
 

@@ -6,6 +6,7 @@ extern crate test;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 use test::Bencher;
+use std::hint::black_box;
 
 fn rand_data() -> ([f64; 3], f64) {
     rand::random()
