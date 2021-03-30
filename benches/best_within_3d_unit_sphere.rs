@@ -90,7 +90,7 @@ pub fn best_1_within_small_euclidean2(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                black_box(kdtree.within(&point.0, 0.01, &squared_euclidean).unwrap().iter().map(|(_, x)|*x).min())
+                black_box(kdtree.best_n_within(&point.0, 0.01, 1, &squared_euclidean).unwrap())
             });
         });
     }
@@ -115,7 +115,7 @@ pub fn best_1_within_medium_euclidean2(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                black_box(kdtree.within(&point.0, 0.05, &squared_euclidean).unwrap().iter().map(|(_, x)|*x).min())
+                black_box(kdtree.best_n_within(&point.0, 0.05, 1, &squared_euclidean).unwrap())
             });
         });
     }
@@ -140,7 +140,7 @@ pub fn best_1_within_large_euclidean2(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                black_box(kdtree.within(&point.0, 0.25, &squared_euclidean).unwrap().iter().map(|(_, x)|*x).min())
+                black_box(kdtree.best_n_within(&point.0, 0.25, 1, &squared_euclidean).unwrap())
             });
         });
     }
@@ -165,24 +165,8 @@ pub fn best_100_within_small_euclidean2(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let max_dist = usize::MAX;
-                let within = kdtree.within(&point.0, 0.01, &squared_euclidean).unwrap();
-                let mut evaluated: BinaryHeap<usize> = BinaryHeap::new();
+                black_box(kdtree.best_n_within(&point.0, 0.01, 100, &squared_euclidean).unwrap())
 
-                for (_, &element) in within.iter() {
-                    if element <= max_dist {
-                        if evaluated.len() < 100 {
-                            evaluated.push(element);
-                        } else {
-                            let mut top = evaluated.peek_mut().unwrap();
-                            if element < *top {
-                                *top = element;
-                            }
-                        }
-                    }
-                }
-
-                let res = black_box(evaluated);
             });
         });
     }
@@ -207,24 +191,7 @@ pub fn best_100_within_medium_euclidean2(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let max_dist = usize::MAX;
-                let within = kdtree.within(&point.0, 0.05, &squared_euclidean).unwrap();
-                let mut evaluated: BinaryHeap<usize> = BinaryHeap::new();
-
-                for (_, &element) in within.iter() {
-                    if element <= max_dist {
-                        if evaluated.len() < 100 {
-                            evaluated.push(element);
-                        } else {
-                            let mut top = evaluated.peek_mut().unwrap();
-                            if element < *top {
-                                *top = element;
-                            }
-                        }
-                    }
-                }
-
-                let res = black_box(evaluated);
+                black_box(kdtree.best_n_within(&point.0, 0.05, 100, &squared_euclidean).unwrap())
             });
         });
     }
@@ -249,24 +216,8 @@ pub fn best_100_within_large_euclidean2(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let max_dist = usize::MAX;
-                let within = kdtree.within(&point.0, 0.25, &squared_euclidean).unwrap();
-                let mut evaluated: BinaryHeap<usize> = BinaryHeap::new();
+                black_box(kdtree.best_n_within(&point.0, 0.25, 100, &squared_euclidean).unwrap())
 
-                for (_, &element) in within.iter() {
-                    if element <= max_dist {
-                        if evaluated.len() < 100 {
-                            evaluated.push(element);
-                        } else {
-                            let mut top = evaluated.peek_mut().unwrap();
-                            if element < *top {
-                                *top = element;
-                            }
-                        }
-                    }
-                }
-
-                let res = black_box(evaluated);
             });
         });
     }

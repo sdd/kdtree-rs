@@ -90,7 +90,7 @@ pub fn nearest_1_euclidean2(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                black_box(kdtree.nearest(&point.0, 1, &squared_euclidean)).unwrap()
+                black_box(kdtree.nearest_one(&point.0, &squared_euclidean)).unwrap()
             });
         });
     }
