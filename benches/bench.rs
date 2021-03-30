@@ -12,10 +12,12 @@ use rand::distributions::{UnitSphereSurface, Distribution};
 use kdtree::distance::{squared_euclidean, dot_product, dot_product_sse, dot_product_sse_aligned};
 use kdtree::KdTree;
 use test::Bencher;
+
 use num_traits::{FromPrimitive};
 
 use std::arch::x86_64::*;
 use aligned::{Aligned, A16};
+use std::hint::black_box;
 
 union SimdToArray {
     array: [f32; 4],
@@ -228,5 +230,5 @@ fn bench_nearest_from_kdtree_with_150k_3d_points_dot_product_sse_aligned(b: &mut
     }
 
     println!("calling nearest");
-    b.iter(|| kdtree.nearest(&point.0, 50000, &dot_product_sse_aligned).unwrap());
+    b.iter(|| kdtree.nearest(&point.0, 50000, &dot_product_sse).unwrap());
 }
