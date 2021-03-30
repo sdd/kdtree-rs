@@ -12,10 +12,12 @@ use rand::distributions::{UnitSphereSurface, Distribution};
 use kdtree::distance::{squared_euclidean, dot_product, dot_product_sse};
 use kdtree::KdTree;
 use test::Bencher;
+
 use num_traits::{FromPrimitive};
 
 use std::arch::x86_64::*;
 use aligned::{Aligned, A16};
+use std::hint::black_box;
 
 union SimdToArray {
     array: [f32; 4],
