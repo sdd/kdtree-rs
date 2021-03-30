@@ -8,10 +8,13 @@ readme = "README.md"
 repository = "https://github.com/sdd/kdtree-rs"
 documentation = "https://docs.rs/kdtree"
 license = "MIT OR Apache-2.0"
+autobenches = false
 
 [dev-dependencies]
 rand = "0.6.5"
 lazy_static = "1.4.0"
+criterion = "0.3.4"
+aligned = "0.3.4"
 
 [dependencies]
 num-traits = "0.2"
@@ -26,3 +29,19 @@ optional = true
 
 [features]
 serialize = ["serde", "serde_derive"]
+
+[[bench]]
+name = "add_points"
+harness = false
+
+[[bench]]
+name = "nearest_3d_unit_sphere"
+harness = false
+
+[[bench]]
+name = "within_3d_unit_sphere"
+harness = false
+
+[[bench]]
+name = "best_within_3d_unit_sphere"
+harness = false
