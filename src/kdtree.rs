@@ -4,12 +4,16 @@ use num_traits::{Float, One, Zero};
 
 use crate::heap_element::HeapElement;
 use crate::util;
+use crate::custom_serde::*;
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
     size: usize,
+
+    #[serde(with = "arrays")]
     min_bounds: [A; K],
+    #[serde(with = "arrays")]
     max_bounds: [A; K],
     content: Node<A, T, K>,
 }
@@ -24,6 +28,7 @@ pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
         split_dimension: u8,
     },
     Leaf {
+        #[serde(with = "vec_arrays")]
         points: Vec<[A; K]>,
         bucket: Vec<T>,
         capacity: usize,
@@ -715,8 +720,8 @@ impl std::fmt::Display for ErrorKind {
 #[cfg(test)]
 mod tests {
     extern crate rand;
+    use crate::kdtree::Node;
     use super::KdTree;
-    use kdtree::Node;
 
     fn random_point() -> ([f64; 2], i32) {
         rand::random::<([f64; 2], i32)>()

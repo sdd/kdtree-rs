@@ -1,6 +1,6 @@
 [package]
 name = "kdtree"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Scott Donnelly <scott@donnel.ly>", "Rui Hu <code@mrhooray.com>"]
 description = "K-dimensional tree in Rust for fast geospatial indexing and nearest neighbors lookup"
 keywords = ["kd-tree", "kdtree", "kd", "tree", "nearest", "neighbor", "search", "geo"]
@@ -9,12 +9,15 @@ repository = "https://github.com/sdd/kdtree-rs"
 documentation = "https://docs.rs/kdtree"
 license = "MIT OR Apache-2.0"
 autobenches = false
+edition = "2018"
 
 [dev-dependencies]
 rand = "0.6.5"
 lazy_static = "1.4.0"
 criterion = "0.3.4"
 aligned = "0.3.4"
+serde = "1.0"
+serde_json = "1.0.64"
 
 [dependencies]
 num-traits = "0.2"

@@ -60,10 +60,15 @@ extern crate num_traits;
 #[cfg(feature = "serialize")]
 #[cfg_attr(feature = "serialize", macro_use)]
 extern crate serde_derive;
+#[cfg(feature = "serialize")]
+#[cfg_attr(feature = "serialize", macro_use)]
+extern crate serde;
 
 pub mod distance;
 mod heap_element;
 pub mod kdtree;
 mod util;
+mod custom_serde;
+
 pub use crate::kdtree::ErrorKind;
 pub use crate::kdtree::KdTree;
