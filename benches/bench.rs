@@ -2,15 +2,15 @@
 #[macro_use]
 extern crate lazy_static;
 
-extern crate kdtree;
+extern crate kiddo;
 extern crate rand;
 extern crate test;
 extern crate num_traits;
 extern crate aligned;
 
 use rand::distributions::{UnitSphereSurface, Distribution};
-use kdtree::distance::{squared_euclidean, dot_product, dot_product_sse, dot_product_sse_aligned};
-use kdtree::KdTree;
+use kiddo::distance::{squared_euclidean, dot_product, dot_product_sse, dot_product_sse_aligned};
+use kiddo::KdTree;
 use test::Bencher;
 
 use num_traits::{FromPrimitive};

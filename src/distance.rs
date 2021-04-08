@@ -12,20 +12,19 @@ union SimdToArray {
 
 /// Returns the squared euclidean distance between two points. When you only
 /// need to compare distances, rather than having the exact distance between
-/// the points, this metric is benefitial because it avoids the expensive square
+/// the points, this metric is beneficial because it avoids the expensive square
 /// root computation.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use kdtree::distance::squared_euclidean;
+/// use kiddo::distance::squared_euclidean;
 ///
 /// assert!(0.0 == squared_euclidean(&[0.0, 0.0], &[0.0, 0.0]));
 /// assert!(2.0 == squared_euclidean(&[0.0, 0.0], &[1.0, 1.0]));
 /// assert!(1.0 == squared_euclidean(&[0.0, 0.0], &[1.0, 0.0]));
 /// ```
 pub fn squared_euclidean<T: Float, const K: usize>(a: &[T; K], b: &[T; K]) -> T {
-    debug_assert_eq!(a.len(), b.len());
     a.iter()
         .zip(b.iter())
         .map(|(x, y)| ((*x) - (*y)) * ((*x) - (*y)))
@@ -33,8 +32,6 @@ pub fn squared_euclidean<T: Float, const K: usize>(a: &[T; K], b: &[T; K]) -> T 
 }
 
 pub fn dot_product<const K: usize>(a: &[f32; K], b: &[f32; K]) -> f32 {
-    debug_assert_eq!(a.len(), b.len());
-
     a.iter()
         .zip(b.iter())
         .map(|(x, y)| ((*x) * (*y)))

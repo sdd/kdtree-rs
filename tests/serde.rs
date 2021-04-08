@@ -1,10 +1,10 @@
 use serde_json;
 
-extern crate kdtree;
+extern crate kiddo;
 
-use kdtree::distance::squared_euclidean;
-use kdtree::ErrorKind;
-use kdtree::KdTree;
+use kiddo::distance::squared_euclidean;
+use kiddo::ErrorKind;
+use kiddo::KdTree;
 
 static POINT_A: ([f64; 2], usize) = ([0f64, 0f64], 0);
 static POINT_B: ([f64; 2], usize) = ([1f64, 1f64], 1);

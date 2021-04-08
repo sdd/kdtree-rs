@@ -1,10 +1,10 @@
 extern crate criterion;
-extern crate kdtree;
+extern crate kiddo;
 extern crate rand;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
-use kdtree::KdTree;
+use kiddo::KdTree;
 
 fn rand_data_2d() -> ([f64; 2], f64) {
     rand::random()

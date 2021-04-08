@@ -11,7 +11,8 @@ chartgroup_defs = [
         ],
         'log_time': True,
         'n_rows': 1,
-        'group_title': "Adding items"
+        'group_title': "Adding items",
+        'output_filename': "benchmark_adding"
     },
     {
         'charts': [
@@ -21,7 +22,8 @@ chartgroup_defs = [
         ],
         'log_time': True,
         'n_rows': 1,
-        'group_title': "Querying: Nearest n Items (sorted)"
+        'group_title': "Querying: Nearest n Items (sorted)",
+        'output_filename': "benchmark_nearest_n"
     },
     {
         'charts': [
@@ -31,7 +33,19 @@ chartgroup_defs = [
         ],
         'log_time': True,
         'n_rows': 1,
-        'group_title': "Querying: all items within specified distance of query point"
+        'group_title': "Querying: all items within specified distance of query point",
+        'output_filename': "benchmark_within"
+    },
+    {
+        'charts': [
+            { 'source': 'within_unsorted(0.01)', 'title': 'unsorted items within 0.01 dist2' },
+            { 'source': 'within_unsorted(0.05)', 'title': 'unsorted items within 0.05 dist2' },
+            { 'source': 'within_unsorted(0.25)', 'title': 'unsorted items within 0.25 dist2' },
+        ],
+        'log_time': True,
+        'n_rows': 1,
+        'group_title': "Querying: all items (unsorted) within specified distance of query point",
+        'output_filename': "benchmark_within_unsorted"
     },
     {
         'charts': [
@@ -44,11 +58,11 @@ chartgroup_defs = [
         ],
         'log_time': True,
         'n_rows': 2,
-        'group_title': "Querying: Best n items within specified distance of query point"
+        'group_title': "Querying: Best n items within specified distance of query point",
+        'output_filename': "benchmark_best_n_within"
     },
     
 ]
-
 
   
 def transform_criterion_data(bench_data):
@@ -67,7 +81,7 @@ def data_for_benchmark(data, name):
     y = [r['estimate'] / 1000 for r in data[name].values()]
     return [ x, y ]
 
-def render_chart_group(data, data_names, chartdef, y_is_logarithmic, n_rows = 1, sup_title = None):
+def render_chart_group(data, data_names, chartdef, y_is_logarithmic, n_rows, sup_title, output_filename):
     n_cols = len(chartdef) // n_rows
     fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(16,4 * n_rows), facecolor='w', edgecolor='k')
     for idx, chart in enumerate(chartdef):
@@ -95,10 +109,10 @@ def render_chart_group(data, data_names, chartdef, y_is_logarithmic, n_rows = 1,
     if sup_title is not None:
         fig.suptitle(sup_title, size='x-large')
     plt.tight_layout()
-    plt.savefig(sup_title + '.png', transparent=False, bbox_inches='tight')
+    plt.savefig(output_filename + '.png', transparent=False, bbox_inches='tight')
     
 def render_chart_group_def(data, data_labels, chart_group_def):
-    render_chart_group(data, data_labels, chart_group_def['charts'], chart_group_def['log_time'], chart_group_def['n_rows'], chart_group_def['group_title'])
+    render_chart_group(data, data_labels, chart_group_def['charts'], chart_group_def['log_time'], chart_group_def['n_rows'], chart_group_def['group_title'], chart_group_def['output_filename'])
     
 def render_chart_group_defs(data, data_labels, chart_group_defs):
     for chart_group_def in chart_group_defs:
@@ -106,10 +120,10 @@ def render_chart_group_defs(data, data_labels, chart_group_defs):
 
 
 
-with open("./criterion-const-generics.ndjson") as datafile:
+with open("./criterion-kiddo.ndjson") as datafile:
   data_kiddo = ndjson.load(datafile)
 
-with open("./criterion-master.ndjson") as datafile:
+with open("./criterion-kdtree.ndjson") as datafile:
   data_kdtree = ndjson.load(datafile)
 
 data_labels = [

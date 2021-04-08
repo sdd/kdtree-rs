@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate criterion;
-extern crate kdtree;
+extern crate kiddo;
 extern crate rand;
 extern crate num_traits;
 extern crate aligned;
@@ -9,8 +9,8 @@ extern crate aligned;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 use rand::distributions::{UnitSphereSurface, Distribution};
-use kdtree::distance::{squared_euclidean};
-use kdtree::KdTree;
+use kiddo::distance::{squared_euclidean};
+use kiddo::KdTree;
 use num_traits::{FromPrimitive, Float};
 use aligned::{Aligned, A16};
 

@@ -1,5 +1,4 @@
 use std::collections::BinaryHeap;
-
 use num_traits::{Float, One, Zero};
 
 use crate::heap_element::HeapElement;
@@ -43,10 +42,34 @@ pub enum ErrorKind {
 }
 
 impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T, K> {
-    pub fn new() -> Result<Self, ErrorKind> {
-        KdTree::with_capacity(2_usize.pow(4))
+    /// Creates a new KdTree with default capacity per node of 16
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn new() -> Self {
+        KdTree::with_capacity(16).unwrap()
     }
 
+    /// Creates a new KdTree with a specific capacity per node
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::with_capacity(8)?;
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
     pub fn with_capacity(capacity: usize) -> Result<Self, ErrorKind> {
         if capacity == 0 {
             return Err(ErrorKind::ZeroCapacity);
@@ -64,10 +87,47 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         })
     }
 
+    /// Returns the current number of elements stored in the tree
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[1.1, 2.1, 5.1], 101)?;
+    ///
+    /// assert_eq!(tree.size(), 2);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
     pub fn size(&self) -> usize {
         self.size
     }
 
+    /// Returns true if the node is a leaf node
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree_1: KdTree<f64, usize, 3> = KdTree::with_capacity(2)?;
+    ///
+    /// tree_1.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree_1.add(&[1.1, 2.1, 5.1], 101)?;
+    ///
+    /// assert_eq!(tree_1.is_leaf(), true);
+    ///
+    /// let mut tree_2: KdTree<f64, usize, 3> = KdTree::with_capacity(1)?;
+    ///
+    /// tree_2.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree_2.add(&[1.1, 2.1, 5.1], 101)?;
+    ///
+    /// assert_eq!(tree_2.is_leaf(), false);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
     pub fn is_leaf(&self) -> bool {
         match &self.content {
             Node::Leaf { .. } => true,
@@ -75,6 +135,27 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         }
     }
 
+    /// Queries the tree to find the nearest `num` elements to `point`, using the specified
+    /// distance metric function.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    ///
+    /// let nearest = tree.nearest(&[1.0, 2.0, 5.1], 1, &squared_euclidean)?;
+    ///
+    /// assert_eq!(nearest.len(), 1);
+    /// assert!((nearest[0].0 - 0.01f64).abs() < f64::EPSILON);
+    /// assert_eq!(*nearest[0].1, 100);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
     pub fn nearest<F>(
         &self,
         point: &[A; K],
@@ -121,6 +202,29 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             .collect())
     }
 
+    /// Queries the tree to find the nearest element to `point`, using the specified
+    /// distance metric function. Faster than querying for nearest(point, 1, ...) due
+    /// to not needing to allocate a Vec for the result
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    ///
+    /// let nearest = tree.nearest_one(&[1.0, 2.0, 5.1], &squared_euclidean)?;
+    ///
+    /// assert!((nearest.0 - 0.01f64).abs() < f64::EPSILON);
+    /// assert_eq!(*nearest.1, 100);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    // TODO: pending only ever gets to about 7 items max. try doing this
+    //       recursively to avoid the alloc/dealloc of the vec
     pub fn nearest_one<F>(
         &self,
         point: &[A; K],
@@ -160,15 +264,11 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         Ok((best_dist, best_elem.unwrap()))
     }
 
-    pub fn within<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
-    where
-        F: Fn(&[A;  K], &[A;  K]) -> A,
+    fn within_impl<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<BinaryHeap::<HeapElement<A, &T>>, ErrorKind>
+        where
+            F: Fn(&[A;  K], &[A;  K]) -> A,
     {
         self.check_point(point)?;
-
-        if self.size == 0 {
-            return Ok(vec![]);
-        }
 
         let mut pending = BinaryHeap::new();
         let mut evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
@@ -189,49 +289,102 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             );
         }
 
-        Ok(evaluated
-            .into_sorted_vec()
-            //.into_vec()
-            .into_iter()
-            .map(Into::into)
-            .collect())
+        Ok(evaluated)
     }
 
-    pub fn best_n_within_into_iter<F>(&self, point: &[A; K], radius: A, max_qty: usize, distance: &F) -> impl Iterator<Item = T>
-        where
-            F: Fn(&[A;  K], &[A;  K]) -> A,
-            T: Copy + Ord
+    /// Queries the tree to find all elements within `radius` of `point`, using the specified
+    /// distance metric function. Results are returned sorted nearest-first
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
+    ///
+    /// let within = tree.within(&[1.0, 2.0, 5.0], 10f64, &squared_euclidean)?;
+    ///
+    /// assert_eq!(within.len(), 2);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn within<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
+    where
+        F: Fn(&[A;  K], &[A;  K]) -> A,
     {
-        // if let Err(err) = self.check_point(point) {
-        //     return Err(err);
-        // }
-        // if self.size == 0 {
-        //     return std::iter::empty::<T>();
-        // }
-
-        let mut pending = Vec::with_capacity(max_qty);
-        let mut evaluated = BinaryHeap::<T>::new();
-
-        pending.push(HeapElement {
-            distance: A::zero(),
-            element: self,
-        });
-
-        while !pending.is_empty() {
-            self.best_n_within_step(
-                point,
-                self.size,
-                max_qty,
-                radius,
-                distance,
-                &mut pending,
-                &mut evaluated,
-            );
+        if self.size == 0 {
+            return Ok(vec![]);
         }
 
-        evaluated.into_iter()
+        self.within_impl(point, radius, distance).map(|evaluated| evaluated
+            .into_sorted_vec()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+        )
     }
 
+    /// Queries the tree to find all elements within `radius` of `point`, using the specified
+    /// distance metric function. Results are returned in arbitrary order. Faster than within()
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
+    ///
+    /// let within = tree.within(&[1.0, 2.0, 5.0], 10f64, &squared_euclidean)?;
+    ///
+    /// assert_eq!(within.len(), 2);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn within_unsorted<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
+        where
+            F: Fn(&[A;  K], &[A;  K]) -> A,
+    {
+        if self.size == 0 {
+            return Ok(vec![]);
+        }
+
+        self.within_impl(point, radius, distance).map(|evaluated| evaluated
+            .into_vec()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+        )
+    }
+
+    /// Queries the tree to find the best `n` elements within `radius` of `point`, using the specified
+    /// distance metric function. Results are returned in arbitrary order. 'Best' is determined by
+    /// performing a comparison of the elements using < (ie, std::ord::lt)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 1)?;
+    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
+    ///
+    /// let best_n_within = tree.best_n_within(&[1.0, 2.0, 5.0], 10f64, 1, &squared_euclidean)?;
+    ///
+    /// assert_eq!(best_n_within[0], 1);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
     pub fn best_n_within<F>(&self, point: &[A;  K], radius: A, max_qty: usize, distance: &F) -> Result<Vec<T>, ErrorKind>
         where
             F: Fn(&[A;  K], &[A;  K]) -> A,
@@ -267,6 +420,63 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             .into_vec()
             .into_iter()
             .collect())
+    }
+
+    /// Queries the tree to find the best `n` elements within `radius` of `point`, using the specified
+    /// distance metric function. Results are returned in arbitrary order. 'Best' is determined by
+    /// performing a comparison of the elements using < (ie, std::ord::lt). Returns an iterator.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 1)?;
+    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
+    ///
+    /// let mut best_n_within_iter = tree.best_n_within_into_iter(&[1.0, 2.0, 5.0], 10f64, 1, &squared_euclidean);
+    /// let first = best_n_within_iter.next().unwrap();
+    ///
+    /// assert_eq!(first, 1);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn best_n_within_into_iter<F>(&self, point: &[A; K], radius: A, max_qty: usize, distance: &F) -> impl Iterator<Item = T>
+        where
+            F: Fn(&[A;  K], &[A;  K]) -> A,
+            T: Copy + Ord
+    {
+        // if let Err(err) = self.check_point(point) {
+        //     return Err(err);
+        // }
+        // if self.size == 0 {
+        //     return std::iter::empty::<T>();
+        // }
+
+        let mut pending = Vec::with_capacity(max_qty);
+        let mut evaluated = BinaryHeap::<T>::new();
+
+        pending.push(HeapElement {
+            distance: A::zero(),
+            element: self,
+        });
+
+        while !pending.is_empty() {
+            self.best_n_within_step(
+                point,
+                self.size,
+                max_qty,
+                radius,
+                distance,
+                &mut pending,
+                &mut evaluated,
+            );
+        }
+
+        evaluated.into_iter()
     }
 
     fn best_n_within_step<'b, F>(
@@ -456,6 +666,27 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         }
     }
 
+    /// Returns an iterator over all elements in the tree, sorted nearest-first to the query point.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    ///
+    /// let mut nearest_iter = tree.iter_nearest(&[1.0, 2.0, 5.1], &squared_euclidean)?;
+    ///
+    /// let nearest_first = nearest_iter.next().unwrap();
+    ///
+    /// assert!((nearest_first.0 - 0.01f64).abs() < f64::EPSILON);
+    /// assert_eq!(*nearest_first.1, 100);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
     pub fn iter_nearest<'a, 'b, F>(
         &'b self,
         point: &'a [A; K],
@@ -482,6 +713,23 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         })
     }
 
+    /// Add an element to the tree. The first argument specifies the location in kd space
+    /// at which the element is located. The second argument is the data associated with
+    /// that point in space.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[1.1, 2.1, 5.1], 101)?;
+    ///
+    /// assert_eq!(tree.size(), 2);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
     pub fn add(&mut self, point: &[A; K], data: T) -> Result<(), ErrorKind> {
         self.check_point(&point)?;
         self.add_unchecked(point, data)
@@ -720,7 +968,7 @@ impl std::fmt::Display for ErrorKind {
 #[cfg(test)]
 mod tests {
     extern crate rand;
-    use crate::kdtree::Node;
+    use super::Node;
     use super::KdTree;
 
     fn random_point() -> ([f64; 2], i32) {
@@ -729,7 +977,7 @@ mod tests {
 
     #[test]
     fn it_has_default_capacity() {
-        let tree: KdTree<f64, i32, 2> = KdTree::new().unwrap();
+        let tree: KdTree<f64, i32, 2> = KdTree::new();
         match &tree.content {
             Node::Leaf { capacity, .. } => {
                 assert_eq!(*capacity, 2_usize.pow(4));
@@ -740,7 +988,7 @@ mod tests {
 
     #[test]
     fn it_can_be_cloned() {
-        let mut tree: KdTree<f64, i32, 2> = KdTree::new().unwrap();
+        let mut tree: KdTree<f64, i32, 2> = KdTree::new();
         let (pos, data) = random_point();
         tree.add(&pos, data).unwrap();
         let mut cloned_tree = tree.clone();
@@ -751,7 +999,7 @@ mod tests {
 
     #[test]
     fn it_holds_on_to_its_capacity_before_splitting() {
-        let mut tree: KdTree<f64, i32, 2> = KdTree::new().unwrap();
+        let mut tree: KdTree<f64, i32, 2> = KdTree::new();
         let capacity = 2_usize.pow(4);
         for _ in 0..capacity {
             let (pos, data) = random_point();

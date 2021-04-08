@@ -1,12 +1,12 @@
 [package]
-name = "kdtree"
-version = "0.3.0"
+name = "kiddo"
+version = "0.1.0"
 authors = ["Scott Donnelly <scott@donnel.ly>", "Rui Hu <code@mrhooray.com>"]
 description = "K-dimensional tree in Rust for fast geospatial indexing and nearest neighbors lookup"
-keywords = ["kd-tree", "kdtree", "kd", "tree", "nearest", "neighbor", "search", "geo"]
+keywords = ["kd-tree", "kdtree", "kd", "nearest", "neighbor"]
 readme = "README.md"
-repository = "https://github.com/sdd/kdtree-rs"
-documentation = "https://docs.rs/kdtree"
+repository = "https://github.com/sdd/kiddo"
+documentation = "https://docs.rs/kiddo"
 license = "MIT OR Apache-2.0"
 autobenches = false
 edition = "2018"
