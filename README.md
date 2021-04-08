@@ -1,39 +1,57 @@
-# kdtree [![Build Status](https://travis-ci.org/mrhooray/kdtree-rs.svg?branch=master)](https://travis-ci.org/mrhooray/kdtree-rs)
-> K-dimensional tree in Rust for fast geospatial indexing and nearest neighbors lookup
+# kiddo
 
-* [Crate](https://crates.io/crates/kdtree)
-* [Documentation](https://docs.rs/kdtree)
+> A fork of kdtree: refactored to use const generics, with some performance improvements and extra features. Thanks and kudos to mrhooray for the original kdtree library on which kiddo is based.
+
+* [Crate](https://crates.io/crates/kiddo)
+* [Documentation](https://docs.rs/kiddo)
 * [Usage](#usage)
-* [Benchmark](#benchmark)
+* [Benchmarks](#benchmarks)
 * [License](#license)
 
+
+## Differences vs kdtree@0.5.1
+
+* The most significant structural difference is that kiddo has been written with the number of dimensions as a const generic parameter. This has a few benefits: many runtime errors (such as `WrongDimension` errors) are now compile time errors as the dimensionality is known at compile time, requiring all methods that have a point as a parameter to be an array or slice of length K. Operations that previously required the use of `Vec`s (such as the `SquaredEuclidean` function) now operate on arrays/slices, eliminating costly heap allocations.
+
+* kiddo provides a specialised `nearest_one()` method, for queries that need the nearest one element only. This method avoids any heap allocations, performing much faster than a call to `nearest()` for a single point as a consequence.
+
+* kiddo extends kdtree's query API by adding two new query methods: `best_n_within()` and `best_n_within_into_iter()`. These are useful for performing queries such as "what are the tallest 10 mountains within 10 degrees of London", "which are the largest 100 settlements within 5 degrees of New York", or "find the brightest 100 stars within a 2 degree radius of this point on the sky". This requires your stored element type to implement `PartialOrd` or `Ord`, and for smaller values to be "better". Bringing this functionality inside of kiddo's implementation, rather than requiring an initial `within()` query followed by a filter of the results, can be over 10x faster, as can be seen in the benchmarks below.
+
+* kdtree's within() function uses a `BinaryHeap` to ensure that the results are ordered by distance from the query point. This sorting can be expensive, especially with a large number of elements. Kiddo's `within_unsorted()` method returns items in arbitrary order. For use cases that don't need the response to be sorted, this is much faster. 
+
+* Some small performance gains arise from using a technique used by some Python BinaryHeap libraries. Rather than `pop()`ing and then immediately `push()`ing to a `BinaryHeap`, it is quicker in this scenario to swap the element at the of the top of the heap and then bubble the new element down.
+
+* The node structure has been refactored to use an `Enum` for aspects of the nodes that differs between stem and leaf nodes, rather than every node having all of these parameters present as `Option`s. This has two benefits. Firstly, stronger correctness guarantees. A type system as strong as Rust's allows us to eliminate the possibility of inconsistent state by design. Secondly, slightly better memory usage (also helped by using arrays rather than `Vec`s for things such as node min/max bounds, possible because of the const generic dimensionality).
+
+
 ## Usage
-Add `kdtree` to `Cargo.toml`
+Add `kiddo` to `Cargo.toml`
 ```toml
 [dependencies]
-kdtree = "0.5.1"
+kiddo = "0.1.0"
 ```
 
 Add points to kdtree and query nearest n points with distance function
 ```rust
-use kdtree::KdTree;
-use kdtree::ErrorKind;
-use kdtree::distance::squared_euclidean;
+use kiddo::KdTree;
+use kiddo::ErrorKind;
+use kiddo::distance::squared_euclidean;
 
 let a: ([f64; 2], usize) = ([0f64, 0f64], 0);
 let b: ([f64; 2], usize) = ([1f64, 1f64], 1);
 let c: ([f64; 2], usize) = ([2f64, 2f64], 2);
 let d: ([f64; 2], usize) = ([3f64, 3f64], 3);
 
-let dimensions = 2;
-let mut kdtree = KdTree::new(dimensions);
+let mut kdtree = KdTree::new()?;
 
-kdtree.add(&a.0, a.1).unwrap();
-kdtree.add(&b.0, b.1).unwrap();
-kdtree.add(&c.0, c.1).unwrap();
-kdtree.add(&d.0, d.1).unwrap();
+kdtree.add(&a.0, a.1)?;
+kdtree.add(&b.0, b.1)?;
+kdtree.add(&c.0, c.1)?;
+kdtree.add(&d.0, d.1)?;
 
 assert_eq!(kdtree.size(), 4);
+
+
 assert_eq!(
     kdtree.nearest(&a.0, 0, &squared_euclidean).unwrap(),
     vec![]
@@ -64,31 +82,91 @@ assert_eq!(
 );
 ```
 
-## Benchmark
-`cargo bench` with 2.3 GHz Intel i5-7360U:
-```
-cargo bench
-     Running target/release/deps/bench-9e622e6a4ed9b92a
+## Benchmarks
 
-running 2 tests
-test bench_add_to_kdtree_with_1k_3d_points       ... bench:         106 ns/iter (+/- 25)
-test bench_nearest_from_kdtree_with_1k_3d_points ... bench:       1,237 ns/iter (+/- 266)
+### Comparison with kdtree@0.5.1
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 2 measured; 0 filtered out
+Criterion is used to perform a series of benchmarks. Each action is benchmarked against trees that contain 100, 1,000, 10,000, 100,000 and 1,000,000 nodes, and charted below.
+
+The `Adding Items` benchmarks are repeated against 2d, 3d and 4d trees. The 3d benchmarks are ran with points that are both of type `f32` and of type `f64`.
+
+All of the remaining tests are only performed against 3d trees, for expediency. The trees are populated with random source data whose points are all on a unit sphere. This use case is representative of common kd-tree usages in geospatial and astronomical contexts.
+
+The `Nearest n Items` tests query the tree for the nearest 1, 100 and 1,000 points at each tree size. The test for the common case of the nearest one point uses kiddo's `nearest_one()` method, which is an optimised method for this specific common use case.
+
+
+
+
+#### Methodology
+
+The results and charts below were created via the following process:
+
+* check out the original-kdtree-criterion branch. This branch is the same code as kdtree@0.5.1, with criterion benchmarks added that perform the same operations as the criterion tests in kiddo. For functions that are present in kiddo but not in kdtree, the criterion tests for kdtree contain extra code to post-process the results from kdtree calls to perform the same actions as the new methods in kiddo.
+
+* use the following command to run the criterion benchmarks for kdtree and generate NDJSON encoded test results:
+
+```bash
+cargo criterion --message-format json > criterion-kdtree.ndjson
 ```
-Thanks [Eh2406](https://github.com/Eh2406) for various fixes and perf improvements.
+
+* check out the master branch.
+
+* use the following command to run the criterion benchmarks for kiddo and generate NDJSON encoded test results:
+
+```bash
+cargo criterion --message-format json --all-features > criterion-kiddo.ndjson
+``` 
+
+* the graphs are generated in python using matplotlib. Ensure you have python installed, as well as the matplotlib and ndjdon python lbraries. Then run the following:
+
+```bash
+python ./generate_benchmark_charts.py
+```
+
+#### Results
+
+The following results were obtained with the above methodology on a machine with these specs:
+
+* AMD Ryzen 5 2500X @ 3600MHz
+* 32Gb DDR4 @ 3200MHz
+
+The results are stored inside this repo as `criterion-kdtree.ndjson` and `criterion-kdtree.ndjson`, should you wish
+to perform your own analysis.
+
+##### Adding items to the tree
+Kiddo has a small performance lead over kdtree@0.5.1, becoming more pronounced at larger tree sizes.
+
+![Charts showing benchmark results for adding items](./benchmark_adding.png)
+
+
+##### Retrieving the nearest n items
+
+Kiddo's optimised `nearest_one()` method gives a huge performance advantage for single item queries, with up to 9x faster performance.
+Kiddo's standard `nearest()` method also outperforms kdtree@0.5.1.
+
+![Charts showing benchmark results for retrieving the nearest n items](./benchmark_nearest_n.png)
+
+##### Retrieving all items within a distance
+Things look closer here at first glance but the logarithmic nature of the charted data may obscure the fact that Kiddo is often up to twice as fast as kdtree@0.5.1 here.
+
+![Charts showing benchmark results for retrieving all items within a specified distance](./benchmark_within.png)
+
+
+
+##### Retrieving the best n items within a specified distance
+Kiddo's performance advantage here ranges from twice as fast for hundred-item trees up to as much as 20x faster for trees with a million items.
+
+![Charts showing benchmark results for retrieving the best n items within a specified distance](./benchmark_best_n_within.png)
 
 ## License
 
 Licensed under either of
 
- * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+* MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 at your option.
 
-### Contribution
+## Contribution
 
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any
-additional terms or conditions.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

@@ -1,5 +1,4 @@
 use std::collections::BinaryHeap;
-
 use num_traits::{Float, One, Zero};
 
 use crate::heap_element::HeapElement;
@@ -121,6 +120,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             .collect())
     }
 
+    // TODO: pending only ever gets to about 7 items max. try doing this
+    //       recursively to avoid the alloc/dealloc of the vec
     pub fn nearest_one<F>(
         &self,
         point: &[A; K],
@@ -191,11 +192,49 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
 
         Ok(evaluated
             .into_sorted_vec()
-            //.into_vec()
             .into_iter()
             .map(Into::into)
             .collect())
     }
+
+    pub fn within_unsorted<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
+        where
+            F: Fn(&[A;  K], &[A;  K]) -> A,
+    {
+        self.check_point(point)?;
+
+        if self.size == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut pending = BinaryHeap::new();
+        let mut evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
+
+        pending.push(HeapElement {
+            distance: A::zero(),
+            element: self,
+        });
+
+        while !pending.is_empty() && (-pending.peek().unwrap().distance <= radius) {
+            self.nearest_step(
+                point,
+                self.size,
+                radius,
+                distance,
+                &mut pending,
+                &mut evaluated,
+            );
+        }
+
+        Ok(evaluated
+            .into_vec()
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+
+    
 
     pub fn best_n_within_into_iter<F>(&self, point: &[A; K], radius: A, max_qty: usize, distance: &F) -> impl Iterator<Item = T>
         where
