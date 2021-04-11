@@ -5,6 +5,12 @@ plugins:
   - - '@semantic-release/exec'
     - verifyConditionsCmd: "semantic-release-rust verify-conditions"
       prepareCmd: "semantic-release-rust prepare ${nextRelease.version}"
-      publishCmd: "semantic-release-rust publish"
+      publishCmd: "semantic-release-rust publish --no-dirty=false"
   - - '@semantic-release/exec'
     - prepareCmd: "./replace-doc-version-strings.sh ${nextRelease.version}"
+  - - '@semantic-release/git'
+    - assets:
+      - README.md
+      - src/lib.rs
+      - Cargo.toml
+      - Cargo.lock
