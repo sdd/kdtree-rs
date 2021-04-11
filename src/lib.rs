@@ -7,7 +7,7 @@
 
 //! # kiddo
 //!
-//! K-dimensional tree for Rust (bucket point-region implementation).
+//! K-dimensional tree library (bucket point-region implementation).
 //! A fork of kdtree. Refactored to use const generics, with some performance improvements and extra features.
 //! Thanks and kudos to mrhooray for the original kdtree library on which kiddo is based.
 //!
