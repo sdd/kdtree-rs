@@ -1,24 +1,24 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate aligned;
 extern crate criterion;
 extern crate kiddo;
-extern crate rand;
 extern crate num_traits;
-extern crate aligned;
+extern crate rand;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
-use rand::distributions::{UnitSphereSurface, Distribution};
-use kiddo::distance::{squared_euclidean};
-use kiddo::KdTree;
-use num_traits::{FromPrimitive};
 use aligned::{Aligned, A16};
+use kiddo::distance::squared_euclidean;
+use kiddo::KdTree;
+use num_traits::FromPrimitive;
+use rand::distributions::{Distribution, UnitSphereSurface};
 
 use std::arch::x86_64::*;
 
 union SimdToArray {
     array: [f32; 4],
-    simd: __m128
+    simd: __m128,
 }
 
 lazy_static! {
@@ -49,7 +49,7 @@ fn rand_unit_sphere_point_f32_qwalign() -> [f32; 4] {
         f32::from_f64(sph64[0]).unwrap(),
         f32::from_f64(sph64[1]).unwrap(),
         f32::from_f64(sph64[2]).unwrap(),
-        0f32
+        0f32,
     ]);
     *res
 }
@@ -70,14 +70,12 @@ fn rand_sphere_data_f32_qw() -> ([f32; 4], usize) {
     (rand_unit_sphere_point_f32_qwalign(), rand::random())
 }
 
-
 pub fn within_small_euclidean2(c: &mut Criterion) {
     let mut group = c.benchmark_group("within(0.01)");
 
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         //group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
             let point = rand_sphere_data();
 
             let mut points = vec![];
@@ -89,9 +87,7 @@ pub fn within_small_euclidean2(c: &mut Criterion) {
                 kdtree.add(&points[i].0, points[i].1).unwrap();
             }
 
-            b.iter(|| {
-                black_box(kdtree.within(&point.0, 0.01, &squared_euclidean)).unwrap()
-            });
+            b.iter(|| black_box(kdtree.within(&point.0, 0.01, &squared_euclidean)).unwrap());
         });
     }
 }
@@ -102,7 +98,6 @@ pub fn within_medium_euclidean2(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         //group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
             let point = rand_sphere_data();
 
             let mut points = vec![];
@@ -114,9 +109,7 @@ pub fn within_medium_euclidean2(c: &mut Criterion) {
                 kdtree.add(&points[i].0, points[i].1).unwrap();
             }
 
-            b.iter(|| {
-                black_box(kdtree.within(&point.0, 0.05, &squared_euclidean)).unwrap()
-            });
+            b.iter(|| black_box(kdtree.within(&point.0, 0.05, &squared_euclidean)).unwrap());
         });
     }
 }
@@ -127,7 +120,6 @@ pub fn within_large_euclidean2(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         //group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
             let point = rand_sphere_data();
 
             let mut points = vec![];
@@ -139,9 +131,7 @@ pub fn within_large_euclidean2(c: &mut Criterion) {
                 kdtree.add(&points[i].0, points[i].1).unwrap();
             }
 
-            b.iter(|| {
-                black_box(kdtree.within(&point.0, 0.25, &squared_euclidean)).unwrap()
-            });
+            b.iter(|| black_box(kdtree.within(&point.0, 0.25, &squared_euclidean)).unwrap());
         });
     }
 }
@@ -152,7 +142,6 @@ pub fn within_unsorted_small_euclidean2(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         //group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
             let point = rand_sphere_data();
 
             let mut points = vec![];
@@ -177,7 +166,6 @@ pub fn within_unsorted_medium_euclidean2(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         //group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
             let point = rand_sphere_data();
 
             let mut points = vec![];
@@ -202,7 +190,6 @@ pub fn within_unsorted_large_euclidean2(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         //group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
             let point = rand_sphere_data();
 
             let mut points = vec![];
@@ -221,6 +208,13 @@ pub fn within_unsorted_large_euclidean2(c: &mut Criterion) {
     }
 }
 
-
-criterion_group!(benches, within_small_euclidean2, within_medium_euclidean2, within_large_euclidean2,within_unsorted_small_euclidean2,within_unsorted_medium_euclidean2,within_unsorted_large_euclidean2);
+criterion_group!(
+    benches,
+    within_small_euclidean2,
+    within_medium_euclidean2,
+    within_large_euclidean2,
+    within_unsorted_small_euclidean2,
+    within_unsorted_medium_euclidean2,
+    within_unsorted_large_euclidean2
+);
 criterion_main!(benches);

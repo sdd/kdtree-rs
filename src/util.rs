@@ -4,7 +4,8 @@ pub fn distance_to_space<F, T, const K: usize>(
     p1: &[T; K],
     min_bounds: &[T; K],
     max_bounds: &[T; K],
-    distance: &F) -> T
+    distance: &F,
+) -> T
 where
     F: Fn(&[T; K], &[T; K]) -> T,
     T: Float,
@@ -40,7 +41,7 @@ mod tests {
             &[0.0, 0.0],
             &[1.0, 1.0],
             &[INFINITY, INFINITY],
-            &squared_euclidean
+            &squared_euclidean,
         );
         assert_eq!(dis, 2.0);
     }
@@ -51,7 +52,7 @@ mod tests {
             &[2.0, 2.0],
             &[NEG_INFINITY, NEG_INFINITY],
             &[INFINITY, INFINITY],
-            &squared_euclidean
+            &squared_euclidean,
         );
         assert_eq!(dis, 0.0);
     }
@@ -68,7 +69,7 @@ mod tests {
             &[-2.0, 0.0],
             &[0.0, NEG_INFINITY],
             &[INFINITY, INFINITY],
-            &squared_euclidean
+            &squared_euclidean,
         );
         assert_eq!(dis, 4.0);
     }
