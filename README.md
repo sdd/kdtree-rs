@@ -136,7 +136,7 @@ to perform your own analysis.
 ##### Adding items to the tree
 Kiddo generally has a very small performance lead over kdtree@0.6.0 at larger tree sizes, with their performance being similar on smaller trees.
 
-![Charts showing benchmark results for adding items](./benchmark_adding.png)
+![Charts showing benchmark results for adding items](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_adding.png)
 
 
 ##### Retrieving the nearest n items
@@ -144,22 +144,22 @@ Kiddo generally has a very small performance lead over kdtree@0.6.0 at larger tr
 Kiddo's optimised `nearest_one()` method gives a huge performance advantage for single item queries, with up to 9x faster performance.
 Kiddo's standard `nearest()` method also outperforms kdtree@0.6.0.
 
-![Charts showing benchmark results for retrieving the nearest n items](./benchmark_nearest_n.png)
+![Charts showing benchmark results for retrieving the nearest n items](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_nearest_n.png)
 
 ##### Retrieving all items within a distance, sorted
 Things look closer here at first glance but the logarithmic nature of the charted data may obscure the fact that Kiddo is often up to twice as fast as kdtree@0.6.0 here.
 
-![Charts showing benchmark results for retrieving all items within a specified distance](./benchmark_within.png)
+![Charts showing benchmark results for retrieving all items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_within.png)
 
 ##### Retrieving all items within a distance, unsorted
 kdtree@0.6.0 does not have a `within_unsorted()` method, so we are comparing kiddo's `within_unsorted()` to kdtree@0.6.0's `within()` here, with kiddo up to 5x faster on the million-item tree.
 
-![Charts showing benchmark results for retrieving all items within a specified distance](./benchmark_within_unsorted.png)
+![Charts showing benchmark results for retrieving all items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_within_unsorted.png)
 
 ##### Retrieving the best n items within a specified distance
 Kiddo's performance advantage here ranges from twice as fast for hundred-item trees up to as much as 20x faster for trees with a million items.
 
-![Charts showing benchmark results for retrieving the best n items within a specified distance](./benchmark_best_n_within.png)
+![Charts showing benchmark results for retrieving the best n items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_best_n_within.png)
 
 ## License
 
