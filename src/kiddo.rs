@@ -784,7 +784,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 ref mut bucket,
                 capacity,
             } => {
-                points.push(point.clone());
+                points.push(*point);
                 bucket.push(data);
                 cap = *capacity;
             }

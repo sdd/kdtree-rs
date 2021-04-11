@@ -68,7 +68,7 @@ pub(crate) mod vec_arrays {
     use std::{convert::TryInto, marker::PhantomData};
 
     pub fn serialize<S: Serializer, T: Serialize, const N: usize>(
-        data: &Vec<[T; N]>,
+        data: &[[T; N]],
         ser: S,
     ) -> Result<S::Ok, S::Error> {
         let mut s = ser.serialize_seq(Some(data.len() * N))?;
