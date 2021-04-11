@@ -2,6 +2,9 @@
 #![feature(const_generics)]
 #![feature(destructuring_assignment)]
 
+#![doc(html_root_url = "https://docs.rs/kiddo/0.1.2")]
+#![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo/issues/")]
+
 //! # kiddo
 //!
 //! K-dimensional tree for Rust (bucket point-region implementation).
@@ -10,9 +13,16 @@
 //!
 //! Ideal for neareast-neighbour stype queries on astronomical and geospatial datasets.
 //!
-//! ## Usage
+//! ## Installation
 //!
+//! Add `kiddo` to `Cargo.toml`
+//! ```toml
+//! [dependencies]
+//! kiddo = "0.1.2"
 //! ```
+//!
+//! ## Usage
+//! ```rust
 //! use kiddo::KdTree;
 //! use kiddo::ErrorKind;
 //! use kiddo::distance::squared_euclidean;
@@ -63,16 +73,16 @@
 
 #[cfg(feature = "serialize")]
 #[cfg_attr(feature = "serialize", macro_use)]
-extern crate serde_derive;
+extern crate serde;
 #[cfg(feature = "serialize")]
 #[cfg_attr(feature = "serialize", macro_use)]
-extern crate serde;
+extern crate serde_derive;
 
+mod custom_serde;
 pub mod distance;
 mod heap_element;
 pub mod kiddo;
 mod util;
-mod custom_serde;
 
 pub use crate::kiddo::ErrorKind;
 pub use crate::kiddo::KdTree;
