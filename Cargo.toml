@@ -1,6 +1,6 @@
 [package]
 name = "kiddo"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Scott Donnelly <scott@donnel.ly>", "Rui Hu <code@mrhooray.com>"]
 description = "K-dimensional tree in Rust for fast geospatial indexing and nearest neighbors lookup"
 keywords = ["kd-tree", "kdtree", "kd", "nearest", "neighbor"]
@@ -10,6 +10,9 @@ documentation = "https://docs.rs/kiddo"
 license = "MIT OR Apache-2.0"
 autobenches = false
 edition = "2018"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dev-dependencies]
 rand = "0.6.5"
