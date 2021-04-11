@@ -1,7 +1,6 @@
 #![feature(allocator_api)]
 #![feature(const_generics)]
 #![feature(destructuring_assignment)]
-
 #![doc(html_root_url = "https://docs.rs/kiddo/0.1.2")]
 #![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo/issues/")]
 

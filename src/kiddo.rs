@@ -5,6 +5,42 @@ use crate::custom_serde::*;
 use crate::heap_element::HeapElement;
 use crate::util;
 
+trait Stack<T>
+where
+    T: Ord,
+{
+    fn stack_push(&mut self, _: T);
+    fn stack_pop(&mut self) -> Option<T>;
+}
+
+impl<T> Stack<T> for Vec<T>
+where
+    T: Ord,
+{
+    #[inline(always)]
+    fn stack_push(&mut self, element: T) {
+        Vec::<T>::push(self, element)
+    }
+    #[inline(always)]
+    fn stack_pop(&mut self) -> Option<T> {
+        Vec::<T>::pop(self)
+    }
+}
+
+impl<T> Stack<T> for BinaryHeap<T>
+where
+    T: Ord,
+{
+    #[inline(always)]
+    fn stack_push(&mut self, element: T) {
+        BinaryHeap::<T>::push(self, element)
+    }
+    #[inline(always)]
+    fn stack_pop(&mut self) -> Option<T> {
+        BinaryHeap::<T>::pop(self)
+    }
+}
+
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
@@ -496,7 +532,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     fn best_n_within_step<'b, F>(
         &self,
         point: &[A; K],
-        num: usize,
+        _num: usize,
         max_qty: usize,
         max_dist: A,
         distance: &F,
@@ -506,31 +542,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         F: Fn(&[A; K], &[A; K]) -> A,
         T: Copy + Ord,
     {
-        let mut curr = &*pending.pop().unwrap().element;
-        debug_assert!(evaluated.len() <= num);
-
-        while let Node::Stem { left, right, .. } = &curr.content {
-            let candidate;
-            (candidate, curr) = if curr.belongs_in_left(point) {
-                (right, left)
-            } else {
-                (left, right)
-            };
-
-            let candidate_to_space = util::distance_to_space(
-                point,
-                &candidate.min_bounds,
-                &candidate.max_bounds,
-                distance,
-            );
-
-            if candidate_to_space <= max_dist {
-                pending.push(HeapElement {
-                    distance: candidate_to_space * -A::one(),
-                    element: &**candidate,
-                });
-            }
-        }
+        let curr = &mut &*pending.pop().unwrap().element;
+        <KdTree<A, T, K>>::populate_pending(point, max_dist, distance, pending, curr);
 
         match &curr.content {
             Node::Leaf { points, bucket, .. } => {
@@ -569,32 +582,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     ) where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        debug_assert!(evaluated.len() <= num);
-
-        let mut curr = &*pending.pop().unwrap().element;
-
-        while let Node::Stem { left, right, .. } = &curr.content {
-            let candidate;
-            (candidate, curr) = if curr.belongs_in_left(point) {
-                (right, left)
-            } else {
-                (left, right)
-            };
-
-            let candidate_to_space = util::distance_to_space(
-                point,
-                &candidate.min_bounds,
-                &candidate.max_bounds,
-                distance,
-            );
-
-            if candidate_to_space <= max_dist {
-                pending.push(HeapElement {
-                    distance: candidate_to_space * -A::one(),
-                    element: &**candidate,
-                });
-            }
-        }
+        let curr = &mut &*pending.pop().unwrap().element;
+        <KdTree<A, T, K>>::populate_pending(point, max_dist, distance, pending, curr);
 
         match &curr.content {
             Node::Leaf { points, bucket, .. } => {
@@ -632,32 +621,9 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     ) where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        let mut curr = &*pending.pop().unwrap().element;
-
+        let curr = &mut &*pending.pop().unwrap().element;
         let evaluated_dist = *best_dist;
-
-        while let Node::Stem { left, right, .. } = &curr.content {
-            let candidate;
-            (candidate, curr) = if curr.belongs_in_left(point) {
-                (right, left)
-            } else {
-                (left, right)
-            };
-
-            let candidate_to_space = util::distance_to_space(
-                point,
-                &candidate.min_bounds,
-                &candidate.max_bounds,
-                distance,
-            );
-
-            if candidate_to_space <= evaluated_dist {
-                pending.push(HeapElement {
-                    distance: candidate_to_space * -A::one(),
-                    element: &**candidate,
-                });
-            }
-        }
+        <KdTree<A, T, K>>::populate_pending(point, evaluated_dist, distance, pending, curr);
 
         match &curr.content {
             Node::Leaf { points, bucket, .. } => {
@@ -676,6 +642,39 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 }
             }
             Node::Stem { .. } => unreachable!(),
+        }
+    }
+
+    fn populate_pending<'a, F>(
+        point: &[A; K],
+        max_dist: A,
+        distance: &F,
+        pending: &mut impl Stack<HeapElement<A, &'a Self>>,
+        curr: &mut &'a Self,
+    ) where
+        F: Fn(&[A; K], &[A; K]) -> A,
+    {
+        while let Node::Stem { left, right, .. } = &curr.content {
+            let candidate;
+            (candidate, *curr) = if curr.belongs_in_left(point) {
+                (right, left)
+            } else {
+                (left, right)
+            };
+
+            let candidate_to_space = util::distance_to_space(
+                point,
+                &candidate.min_bounds,
+                &candidate.max_bounds,
+                distance,
+            );
+
+            if candidate_to_space <= max_dist {
+                pending.stack_push(HeapElement {
+                    distance: candidate_to_space * -A::one(),
+                    element: &**candidate,
+                });
+            }
         }
     }
 
