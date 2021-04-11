@@ -21,6 +21,10 @@ jobs:
         run: npm i -g semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/github @semantic-release/exec
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
       - name: Install semantic-release-rust
         uses: actions-rs/cargo@v1
         with:
