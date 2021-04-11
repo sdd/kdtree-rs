@@ -1,9 +1,9 @@
-use std::collections::BinaryHeap;
 use num_traits::{Float, One, Zero};
+use std::collections::BinaryHeap;
 
+use crate::custom_serde::*;
 use crate::heap_element::HeapElement;
 use crate::util;
-use crate::custom_serde::*;
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
@@ -31,14 +31,14 @@ pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
         points: Vec<[A; K]>,
         bucket: Vec<T>,
         capacity: usize,
-    }
+    },
 }
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
     NonFiniteCoordinate,
     ZeroCapacity,
-    Empty
+    Empty,
 }
 
 impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T, K> {
@@ -131,7 +131,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     pub fn is_leaf(&self) -> bool {
         match &self.content {
             Node::Leaf { .. } => true,
-            Node::Stem { .. } => false
+            Node::Stem { .. } => false,
         }
     }
 
@@ -225,13 +225,9 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     /// ```
     // TODO: pending only ever gets to about 7 items max. try doing this
     //       recursively to avoid the alloc/dealloc of the vec
-    pub fn nearest_one<F>(
-        &self,
-        point: &[A; K],
-        distance: &F,
-    ) -> Result<(A, &T), ErrorKind>
-        where
-            F: Fn(&[A; K], &[A; K]) -> A,
+    pub fn nearest_one<F>(&self, point: &[A; K], distance: &F) -> Result<(A, &T), ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
         if self.size == 0 {
             return Err(ErrorKind::Empty);
@@ -248,25 +244,27 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             element: self,
         });
 
-        while !pending.is_empty()
-            && (best_elem.is_none()
-            || (pending[0].distance > best_dist))
-        {
+        while !pending.is_empty() && (best_elem.is_none() || (pending[0].distance > best_dist)) {
             self.nearest_one_step(
                 point,
                 distance,
                 &mut pending,
                 &mut best_dist,
-                &mut best_elem
+                &mut best_elem,
             );
         }
 
         Ok((best_dist, best_elem.unwrap()))
     }
 
-    fn within_impl<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<BinaryHeap::<HeapElement<A, &T>>, ErrorKind>
-        where
-            F: Fn(&[A;  K], &[A;  K]) -> A,
+    fn within_impl<F>(
+        &self,
+        point: &[A; K],
+        radius: A,
+        distance: &F,
+    ) -> Result<BinaryHeap<HeapElement<A, &T>>, ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
         self.check_point(point)?;
 
@@ -312,20 +310,26 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     /// assert_eq!(within.len(), 2);
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
-    pub fn within<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
+    pub fn within<F>(
+        &self,
+        point: &[A; K],
+        radius: A,
+        distance: &F,
+    ) -> Result<Vec<(A, &T)>, ErrorKind>
     where
-        F: Fn(&[A;  K], &[A;  K]) -> A,
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
         if self.size == 0 {
             return Ok(vec![]);
         }
 
-        self.within_impl(point, radius, distance).map(|evaluated| evaluated
-            .into_sorted_vec()
-            .into_iter()
-            .map(Into::into)
-            .collect()
-        )
+        self.within_impl(point, radius, distance).map(|evaluated| {
+            evaluated
+                .into_sorted_vec()
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        })
     }
 
     /// Queries the tree to find all elements within `radius` of `point`, using the specified
@@ -348,20 +352,21 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     /// assert_eq!(within.len(), 2);
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
-    pub fn within_unsorted<F>(&self, point: &[A; K], radius: A, distance: &F) -> Result<Vec<(A, &T)>, ErrorKind>
-        where
-            F: Fn(&[A;  K], &[A;  K]) -> A,
+    pub fn within_unsorted<F>(
+        &self,
+        point: &[A; K],
+        radius: A,
+        distance: &F,
+    ) -> Result<Vec<(A, &T)>, ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
         if self.size == 0 {
             return Ok(vec![]);
         }
 
-        self.within_impl(point, radius, distance).map(|evaluated| evaluated
-            .into_vec()
-            .into_iter()
-            .map(Into::into)
-            .collect()
-        )
+        self.within_impl(point, radius, distance)
+            .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())
     }
 
     /// Queries the tree to find the best `n` elements within `radius` of `point`, using the specified
@@ -385,10 +390,16 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     /// assert_eq!(best_n_within[0], 1);
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
-    pub fn best_n_within<F>(&self, point: &[A;  K], radius: A, max_qty: usize, distance: &F) -> Result<Vec<T>, ErrorKind>
-        where
-            F: Fn(&[A;  K], &[A;  K]) -> A,
-            T: Copy + Ord
+    pub fn best_n_within<F>(
+        &self,
+        point: &[A; K],
+        radius: A,
+        max_qty: usize,
+        distance: &F,
+    ) -> Result<Vec<T>, ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
+        T: Copy + Ord,
     {
         if self.size == 0 {
             return Ok(vec![]);
@@ -416,10 +427,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             );
         }
 
-        Ok(evaluated
-            .into_vec()
-            .into_iter()
-            .collect())
+        Ok(evaluated.into_vec().into_iter().collect())
     }
 
     /// Queries the tree to find the best `n` elements within `radius` of `point`, using the specified
@@ -444,10 +452,16 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     /// assert_eq!(first, 1);
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
-    pub fn best_n_within_into_iter<F>(&self, point: &[A; K], radius: A, max_qty: usize, distance: &F) -> impl Iterator<Item = T>
-        where
-            F: Fn(&[A;  K], &[A;  K]) -> A,
-            T: Copy + Ord
+    pub fn best_n_within_into_iter<F>(
+        &self,
+        point: &[A; K],
+        radius: A,
+        max_qty: usize,
+        distance: &F,
+    ) -> impl Iterator<Item = T>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
+        T: Copy + Ord,
     {
         // if let Err(err) = self.check_point(point) {
         //     return Err(err);
@@ -489,13 +503,13 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         pending: &mut Vec<HeapElement<A, &'b Self>>,
         evaluated: &mut BinaryHeap<T>,
     ) where
-        F: Fn(&[A;  K], &[A;  K]) -> A,
-        T: Copy + Ord
+        F: Fn(&[A; K], &[A; K]) -> A,
+        T: Copy + Ord,
     {
         let mut curr = &*pending.pop().unwrap().element;
         debug_assert!(evaluated.len() <= num);
 
-        while let Node::Stem {left, right, .. } = &curr.content {
+        while let Node::Stem { left, right, .. } = &curr.content {
             let candidate;
             (candidate, curr) = if curr.belongs_in_left(point) {
                 (right, left)
@@ -507,7 +521,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 point,
                 &candidate.min_bounds,
                 &candidate.max_bounds,
-                distance
+                distance,
             );
 
             if candidate_to_space <= max_dist {
@@ -519,8 +533,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         }
 
         match &curr.content {
-            Node::Leaf {points, bucket, .. } => {
-
+            Node::Leaf { points, bucket, .. } => {
                 let points = points.iter();
                 let bucket = bucket.iter();
                 let iter = points.zip(bucket).map(|(p, d)| HeapElement {
@@ -540,8 +553,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                         }
                     }
                 }
-            },
-            Node::Stem { .. } => unreachable!()
+            }
+            Node::Stem { .. } => unreachable!(),
         }
     }
 
@@ -560,7 +573,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
 
         let mut curr = &*pending.pop().unwrap().element;
 
-        while let Node::Stem {left, right, .. } = &curr.content {
+        while let Node::Stem { left, right, .. } = &curr.content {
             let candidate;
             (candidate, curr) = if curr.belongs_in_left(point) {
                 (right, left)
@@ -572,7 +585,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 point,
                 &candidate.min_bounds,
                 &candidate.max_bounds,
-                distance
+                distance,
             );
 
             if candidate_to_space <= max_dist {
@@ -604,8 +617,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                         }
                     }
                 }
-            },
-            Node::Stem { .. } => unreachable!()
+            }
+            Node::Stem { .. } => unreachable!(),
         }
     }
 
@@ -623,7 +636,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
 
         let evaluated_dist = *best_dist;
 
-        while let Node::Stem {left, right, .. } = &curr.content {
+        while let Node::Stem { left, right, .. } = &curr.content {
             let candidate;
             (candidate, curr) = if curr.belongs_in_left(point) {
                 (right, left)
@@ -635,7 +648,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 point,
                 &candidate.min_bounds,
                 &candidate.max_bounds,
-                distance
+                distance,
             );
 
             if candidate_to_space <= evaluated_dist {
@@ -661,8 +674,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                         *best_dist = element.distance;
                     }
                 }
-            },
-            Node::Stem { .. } => unreachable!()
+            }
+            Node::Stem { .. } => unreachable!(),
         }
     }
 
@@ -693,7 +706,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         distance: &'a F,
     ) -> Result<NearestIter<'a, 'b, A, T, F, K>, ErrorKind>
     where
-        F: Fn( &[A; K],  &[A; K]) -> A,
+        F: Fn(&[A; K], &[A; K]) -> A,
     {
         self.check_point(point)?;
 
@@ -709,7 +722,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             point,
             pending,
             evaluated,
-            distance
+            distance,
         })
     }
 
@@ -739,11 +752,17 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         let res = match &mut self.content {
             Node::Leaf { .. } => {
                 self.add_to_bucket(&point, data);
-                return Ok(())
-            },
+                return Ok(());
+            }
 
-            Node::Stem { ref mut left, ref mut right, split_dimension, split_value } => {
-                if point[*split_dimension as usize] < *split_value { // belongs_in_left
+            Node::Stem {
+                ref mut left,
+                ref mut right,
+                split_dimension,
+                split_value,
+            } => {
+                if point[*split_dimension as usize] < *split_value {
+                    // belongs_in_left
                     left.add_unchecked(point, data)
                 } else {
                     right.add_unchecked(point, data)
@@ -761,12 +780,16 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         self.extend(&point);
         let cap;
         match &mut self.content {
-            Node::Leaf { ref mut points, ref mut bucket, capacity } => {
+            Node::Leaf {
+                ref mut points,
+                ref mut bucket,
+                capacity,
+            } => {
                 points.push(point.clone());
                 bucket.push(data);
                 cap = *capacity;
-            },
-            Node::Stem { .. } => unreachable!()
+            }
+            Node::Stem { .. } => unreachable!(),
         }
 
         self.size += 1;
@@ -780,7 +803,11 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         self.check_point(point)?;
 
         match &mut self.content {
-            Node::Leaf { ref mut points, ref mut bucket, .. } => {
+            Node::Leaf {
+                ref mut points,
+                ref mut bucket,
+                ..
+            } => {
                 while let Some(p_index) = points.iter().position(|x| x == point) {
                     if &bucket[p_index] == data {
                         points.remove(p_index);
@@ -789,8 +816,12 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                         self.size -= 1;
                     }
                 }
-            },
-            Node::Stem { ref mut left, ref mut right, .. } => {
+            }
+            Node::Stem {
+                ref mut left,
+                ref mut right,
+                ..
+            } => {
                 let right_removed = right.remove(point, data)?;
                 if right_removed > 0 {
                     self.size -= right_removed;
@@ -810,7 +841,12 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
 
     fn split(&mut self) {
         match &mut self.content {
-            Node::Leaf { ref mut bucket, ref mut points, capacity, .. } => {
+            Node::Leaf {
+                ref mut bucket,
+                ref mut points,
+                capacity,
+                ..
+            } => {
                 let mut split_dimension: Option<usize> = None;
                 let mut max = A::zero();
                 for dim in 0..K {
@@ -832,7 +868,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                     while !points.is_empty() {
                         let point = points.swap_remove(0);
                         let data = bucket.swap_remove(0);
-                        if point[split_dimension] < split_value { // belongs_in_left
+                        if point[split_dimension] < split_value {
+                            // belongs_in_left
                             left.add_to_bucket(&point, data);
                         } else {
                             right.add_to_bucket(&point, data);
@@ -843,24 +880,26 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                         left,
                         right,
                         split_value,
-                        split_dimension: split_dimension as u8
+                        split_dimension: split_dimension as u8,
                     }
                 }
-            },
-            Node::Stem { .. } => unreachable!()
+            }
+            Node::Stem { .. } => unreachable!(),
         }
     }
 
     fn belongs_in_left(&self, point: &[A; K]) -> bool {
         match &self.content {
-            Node::Stem { ref split_dimension, ref split_value, .. } => {
-                point[*split_dimension as usize] < *split_value
-            },
-            Node::Leaf { .. } => unreachable!()
+            Node::Stem {
+                ref split_dimension,
+                ref split_value,
+                ..
+            } => point[*split_dimension as usize] < *split_value,
+            Node::Leaf { .. } => unreachable!(),
         }
     }
 
-    fn extend(&mut self,  point: &[A; K]) {
+    fn extend(&mut self, point: &[A; K]) {
         let min = self.min_bounds.iter_mut();
         let max = self.max_bounds.iter_mut();
         for ((l, h), v) in min.zip(max).zip(point.iter()) {
@@ -873,8 +912,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         }
     }
 
-    fn check_point(&self, point: &[A;  K]) -> Result<(), ErrorKind> {
-        if point.iter().all(|n|n.is_finite()) {
+    fn check_point(&self, point: &[A; K]) -> Result<(), ErrorKind> {
+        if point.iter().all(|n| n.is_finite()) {
             Ok(())
         } else {
             Err(ErrorKind::NonFiniteCoordinate)
@@ -893,13 +932,14 @@ pub struct NearestIter<
     point: &'a [A; K],
     pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, K>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b T>>,
-    distance: &'a F
+    distance: &'a F,
 }
 
 impl<'a, 'b, A: Float + Zero + One, T: 'b, F: 'a, const K: usize> Iterator
     for NearestIter<'a, 'b, A, T, F, K>
 where
-    F: Fn(&[A;  K], &[A;  K]) -> A, T: PartialEq
+    F: Fn(&[A; K], &[A; K]) -> A,
+    T: PartialEq,
 {
     type Item = (A, &'b T);
     fn next(&mut self) -> Option<(A, &'b T)> {
@@ -925,7 +965,7 @@ where
                         point,
                         &candidate.min_bounds,
                         &candidate.max_bounds,
-                        distance
+                        distance,
                     ),
                     element: &**candidate,
                 });
@@ -941,8 +981,8 @@ where
                             distance: -distance(point, &p),
                             element: d,
                         }));
-                },
-                Node::Stem { .. } => unreachable!()
+                }
+                Node::Stem { .. } => unreachable!(),
             }
         }
         self.evaluated.pop().map(|x| (-x.distance, x.element))
@@ -968,8 +1008,8 @@ impl std::fmt::Display for ErrorKind {
 #[cfg(test)]
 mod tests {
     extern crate rand;
-    use super::Node;
     use super::KdTree;
+    use super::Node;
 
     fn random_point() -> ([f64; 2], i32) {
         rand::random::<([f64; 2], i32)>()
@@ -981,8 +1021,8 @@ mod tests {
         match &tree.content {
             Node::Leaf { capacity, .. } => {
                 assert_eq!(*capacity, 2_usize.pow(4));
-            },
-            Node::Stem { .. } => unreachable!()
+            }
+            Node::Stem { .. } => unreachable!(),
         }
     }
 

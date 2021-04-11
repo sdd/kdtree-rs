@@ -28,8 +28,8 @@ pub fn add_100_2d(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         group.throughput(Throughput::Elements(100));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
-            let points_to_add: Vec<([f64; 2], f64)> = (0..100).into_iter().map(|_| rand_data_2d()).collect();
+            let points_to_add: Vec<([f64; 2], f64)> =
+                (0..100).into_iter().map(|_| rand_data_2d()).collect();
 
             let mut points = vec![];
             let mut kdtree = KdTree::with_capacity(16).unwrap();
@@ -41,9 +41,9 @@ pub fn add_100_2d(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                points_to_add.iter().for_each(|point| {
-                    black_box(kdtree.add(black_box(&point.0), point.1)).unwrap()
-                })
+                points_to_add
+                    .iter()
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
             });
         });
     }
@@ -55,8 +55,8 @@ pub fn add_100_3d(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         group.throughput(Throughput::Elements(100));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
-            let points_to_add: Vec<([f64; 3], f64)> = (0..100).into_iter().map(|_| rand_data_3d()).collect();
+            let points_to_add: Vec<([f64; 3], f64)> =
+                (0..100).into_iter().map(|_| rand_data_3d()).collect();
 
             let mut points = vec![];
             let mut kdtree = KdTree::with_capacity(16).unwrap();
@@ -68,9 +68,9 @@ pub fn add_100_3d(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                points_to_add.iter().for_each(|point| {
-                    black_box(kdtree.add(black_box(&point.0), point.1)).unwrap()
-                })
+                points_to_add
+                    .iter()
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
             });
         });
     }
@@ -82,8 +82,8 @@ pub fn add_100_4d(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         group.throughput(Throughput::Elements(100));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
-            let points_to_add: Vec<([f64; 4], f64)> = (0..100).into_iter().map(|_| rand_data_4d()).collect();
+            let points_to_add: Vec<([f64; 4], f64)> =
+                (0..100).into_iter().map(|_| rand_data_4d()).collect();
 
             let mut points = vec![];
             let mut kdtree = KdTree::with_capacity(16).unwrap();
@@ -95,9 +95,9 @@ pub fn add_100_4d(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                points_to_add.iter().for_each(|point| {
-                    black_box(kdtree.add(black_box(&point.0), point.1)).unwrap()
-                })
+                points_to_add
+                    .iter()
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
             });
         });
     }
@@ -109,8 +109,8 @@ pub fn add_100_3d_f32(c: &mut Criterion) {
     for size in [100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         group.throughput(Throughput::Elements(100));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-
-            let points_to_add: Vec<([f32; 3], f32)> = (0..100).into_iter().map(|_| rand_data_3d_f32()).collect();
+            let points_to_add: Vec<([f32; 3], f32)> =
+                (0..100).into_iter().map(|_| rand_data_3d_f32()).collect();
 
             let mut points = vec![];
             let mut kdtree = KdTree::with_capacity(16).unwrap();
@@ -122,9 +122,9 @@ pub fn add_100_3d_f32(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                points_to_add.iter().for_each(|point| {
-                    black_box(kdtree.add(black_box(&point.0), point.1)).unwrap()
-                })
+                points_to_add
+                    .iter()
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
             });
         });
     }

@@ -2,12 +2,12 @@
 //! euclidean distance which is no more than the square root of the sum of the
 //! squares of the distances in each dimension.
 
-use std::arch::x86_64::*;
 use num_traits::Float;
+use std::arch::x86_64::*;
 
 union SimdToArray {
     array: [f32; 4],
-    simd: __m128
+    simd: __m128,
 }
 
 /// Returns the squared euclidean distance between two points. When you only
@@ -44,7 +44,9 @@ pub unsafe fn dot_sse(a: *const f32, b: *const f32) -> f32 {
     let a_mm = _mm_loadu_ps(a);
     let b_mm = _mm_loadu_ps(b);
 
-    let res: SimdToArray = SimdToArray { simd: _mm_dp_ps(a_mm, b_mm, 0x71) };
+    let res: SimdToArray = SimdToArray {
+        simd: _mm_dp_ps(a_mm, b_mm, 0x71),
+    };
     res.array[0]
 }
 
@@ -54,7 +56,9 @@ pub unsafe fn dot_sse_aligned(a: *const f32, b: *const f32) -> f32 {
     let a_mm = _mm_load_ps(a);
     let b_mm = _mm_load_ps(b);
 
-    let res: SimdToArray = SimdToArray { simd: _mm_dp_ps(a_mm, b_mm, 0x71) };
+    let res: SimdToArray = SimdToArray {
+        simd: _mm_dp_ps(a_mm, b_mm, 0x71),
+    };
     res.array[0]
 }
 
@@ -64,28 +68,22 @@ pub fn dot_product_sse<const K: usize>(a: &[f32; K], b: &[f32; K]) -> f32 {
     } else if K == 4 {
         dot_product_sse_4(&a[0..4], &a[0..4])
     } else {
-         dot_product(a, b)
+        dot_product(a, b)
     }
 }
 
 pub fn dot_product_sse_3(a: &[f32], b: &[f32]) -> f32 {
     let ap = [a[0], a[1], a[2], 0f32].as_ptr();
     let bp = [b[0], b[1], b[2], 0f32].as_ptr();
-    unsafe {
-        dot_sse(ap, bp)
-    }
+    unsafe { dot_sse(ap, bp) }
 }
 
 pub fn dot_product_sse_4(a: &[f32], b: &[f32]) -> f32 {
-    unsafe {
-        dot_sse(a.as_ptr(), b.as_ptr())
-    }
+    unsafe { dot_sse(a.as_ptr(), b.as_ptr()) }
 }
 
 pub fn dot_product_sse_aligned(a: &[f32; 4], b: &[f32; 4]) -> f32 {
     let ap = a.as_ptr();
     let bp = b.as_ptr();
-    unsafe {
-        dot_sse_aligned(ap, bp)
-    }
+    unsafe { dot_sse_aligned(ap, bp) }
 }
