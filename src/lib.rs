@@ -1,7 +1,7 @@
 #![feature(allocator_api)]
 #![feature(const_generics)]
 #![feature(destructuring_assignment)]
-#![doc(html_root_url = "https://docs.rs/kiddo/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/kiddo/0.1.3")]
 #![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo/issues/")]
 
 //! # kiddo
@@ -17,7 +17,7 @@
 //! Add `kiddo` to `Cargo.toml`
 //! ```toml
 //! [dependencies]
-//! kiddo = "0.1.2"
+//! kiddo = "0.1.3"
 //! ```
 //!
 //! ## Usage
