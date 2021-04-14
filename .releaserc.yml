@@ -7,7 +7,7 @@ plugins:
       prepareCmd: "semantic-release-rust prepare ${nextRelease.version}"
       publishCmd: "semantic-release-rust publish --no-dirty=false"
   - - '@semantic-release/exec'
-    - prepareCmd: "./replace-doc-version-strings.sh ${nextRelease.version}"
+    - prepareCmd: "./replace-doc-version-strings.sh kiddo ${nextRelease.version}"
   - - '@semantic-release/git'
     - assets:
       - README.md
