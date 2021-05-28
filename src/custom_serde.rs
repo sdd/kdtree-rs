@@ -1,3 +1,4 @@
+#[cfg(feature = "serialize")]
 pub(crate) mod arrays {
     use core::option::Option::None;
     use serde::{
@@ -58,6 +59,7 @@ pub(crate) mod arrays {
     }
 }
 
+#[cfg(feature = "serialize")]
 pub(crate) mod vec_arrays {
     use core::option::Option::None;
     use serde::ser::SerializeSeq;

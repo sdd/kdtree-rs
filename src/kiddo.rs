@@ -1,6 +1,8 @@
-use num_traits::{Float, One, Zero};
 use std::collections::BinaryHeap;
 
+use num_traits::{Float, One, Zero};
+
+#[cfg(feature = "serialize")]
 use crate::custom_serde::*;
 use crate::heap_element::HeapElement;
 use crate::util;
@@ -46,9 +48,9 @@ where
 pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
     size: usize,
 
-    #[serde(with = "arrays")]
+    #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     min_bounds: [A; K],
-    #[serde(with = "arrays")]
+    #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     max_bounds: [A; K],
     content: Node<A, T, K>,
 }
@@ -63,7 +65,7 @@ pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
         split_dimension: u8,
     },
     Leaf {
-        #[serde(with = "vec_arrays")]
+        #[cfg_attr(feature = "serialize", serde(with = "vec_arrays"))]
         points: Vec<[A; K]>,
         bucket: Vec<T>,
         capacity: usize,
