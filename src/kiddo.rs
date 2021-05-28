@@ -4,44 +4,10 @@ use num_traits::{Float, One, Zero};
 
 #[cfg(feature = "serialize")]
 use crate::custom_serde::*;
+
 use crate::heap_element::HeapElement;
 use crate::util;
-
-trait Stack<T>
-where
-    T: Ord,
-{
-    fn stack_push(&mut self, _: T);
-    fn stack_pop(&mut self) -> Option<T>;
-}
-
-impl<T> Stack<T> for Vec<T>
-where
-    T: Ord,
-{
-    #[inline(always)]
-    fn stack_push(&mut self, element: T) {
-        Vec::<T>::push(self, element)
-    }
-    #[inline(always)]
-    fn stack_pop(&mut self) -> Option<T> {
-        Vec::<T>::pop(self)
-    }
-}
-
-impl<T> Stack<T> for BinaryHeap<T>
-where
-    T: Ord,
-{
-    #[inline(always)]
-    fn stack_push(&mut self, element: T) {
-        BinaryHeap::<T>::push(self, element)
-    }
-    #[inline(always)]
-    fn stack_pop(&mut self) -> Option<T> {
-        BinaryHeap::<T>::pop(self)
-    }
-}
+use crate::stack::Stack;
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
@@ -1009,6 +975,7 @@ impl std::fmt::Display for ErrorKind {
 #[cfg(test)]
 mod tests {
     extern crate rand;
+
     use super::KdTree;
     use super::Node;
 

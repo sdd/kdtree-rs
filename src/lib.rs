@@ -81,6 +81,7 @@ pub mod distance;
 mod heap_element;
 pub mod kiddo;
 mod util;
+mod stack;
 
 pub use crate::kiddo::ErrorKind;
 pub use crate::kiddo::KdTree;
