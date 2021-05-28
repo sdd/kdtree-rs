@@ -71,7 +71,6 @@
 //! ```
 
 #[cfg(feature = "serialize")]
-#[cfg_attr(feature = "serialize", macro_use)]
 extern crate serde;
 #[cfg(feature = "serialize")]
 #[cfg_attr(feature = "serialize", macro_use)]
