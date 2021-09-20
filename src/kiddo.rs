@@ -745,14 +745,14 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
     pub fn add(&mut self, point: &[A; K], data: T) -> Result<(), ErrorKind> {
-        self.check_point(&point)?;
+        self.check_point(point)?;
         self.add_unchecked(point, data)
     }
 
     fn add_unchecked(&mut self, point: &[A; K], data: T) -> Result<(), ErrorKind> {
         let res = match &mut self.content {
             Node::Leaf { .. } => {
-                self.add_to_bucket(&point, data);
+                self.add_to_bucket(point, data);
                 return Ok(());
             }
 
@@ -771,14 +771,14 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             }
         };
 
-        self.extend(&point);
+        self.extend(point);
         self.size += 1;
 
         res
     }
 
     fn add_to_bucket(&mut self, point: &[A; K], data: T) {
-        self.extend(&point);
+        self.extend(point);
         let cap;
         match &mut self.content {
             Node::Leaf {
@@ -979,7 +979,7 @@ where
 
                     self.evaluated
                         .extend(points.zip(bucket).map(|(p, d)| HeapElement {
-                            distance: -distance(point, &p),
+                            distance: -distance(point, p),
                             element: d,
                         }));
                 }

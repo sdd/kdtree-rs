@@ -1,28 +1,17 @@
-#[macro_use]
-extern crate lazy_static;
-extern crate aligned;
-extern crate criterion;
-extern crate kiddo;
-extern crate num_traits;
-extern crate rand;
-
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 use aligned::{Aligned, A16};
 use kiddo::distance::squared_euclidean;
 use kiddo::KdTree;
 use num_traits::FromPrimitive;
-use rand::distributions::{Distribution, UnitSphereSurface};
+use rand_distr::Distribution;
+use rand_distr::UnitSphere as SPHERE;
 
 use std::arch::x86_64::*;
 
 union SimdToArray {
     array: [f32; 4],
     simd: __m128,
-}
-
-lazy_static! {
-    static ref SPHERE: UnitSphereSurface = UnitSphereSurface::new();
 }
 
 //fn rand_data() -> ([f64; 3], f64) {
