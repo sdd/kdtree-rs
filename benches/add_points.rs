@@ -1,7 +1,3 @@
-extern crate criterion;
-extern crate kiddo;
-extern crate rand;
-
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 use kiddo::KdTree;
