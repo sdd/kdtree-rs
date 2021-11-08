@@ -658,10 +658,12 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     {
         while let Node::Stem { left, right, .. } = &curr.content {
             let candidate;
-            (candidate, *curr) = if curr.belongs_in_left(point) {
-                (right, left)
+            if curr.belongs_in_left(point) {
+                candidate = right;
+                *curr = left;
             } else {
-                (left, right)
+                candidate = left;
+                *curr = right;
             };
 
             let candidate_to_space = util::distance_to_space(
@@ -955,12 +957,13 @@ where
             let mut curr = &*self.pending.pop().unwrap().element;
             while let Node::Stem { left, right, .. } = &curr.content {
                 let candidate;
-                (candidate, curr) = if curr.belongs_in_left(point) {
-                    (right, left)
+                if curr.belongs_in_left(point) {
+                    candidate = right;
+                    curr = left;
                 } else {
-                    (left, right)
+                    candidate = left;
+                    curr = right;
                 };
-
                 self.pending.push(HeapElement {
                     distance: -distance_to_space(
                         point,
