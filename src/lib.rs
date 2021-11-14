@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/kiddo/0.1.6")]
+#![doc(html_root_url = "https://docs.rs/kiddo/0.1.7")]
 #![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo/issues/")]
 
 //! # kiddo
@@ -14,7 +14,7 @@
 //! Add `kiddo` to `Cargo.toml`
 //! ```toml
 //! [dependencies]
-//! kiddo = "0.1.6"
+//! kiddo = "0.1.7"
 //! ```
 //!
 //! ## Usage
