@@ -28,7 +28,7 @@ pub fn add_100_2d(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_2d()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_data_2d());
             }
@@ -55,7 +55,7 @@ pub fn add_100_3d(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_3d()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_data_3d());
             }
@@ -82,7 +82,7 @@ pub fn add_100_4d(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_4d()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_data_4d());
             }
@@ -109,7 +109,7 @@ pub fn add_100_3d_f32(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_3d_f32()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_data_3d_f32());
             }

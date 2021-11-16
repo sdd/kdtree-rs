@@ -68,7 +68,7 @@ pub fn nearest_1_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
@@ -90,7 +90,7 @@ pub fn nearest_100_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
@@ -112,7 +112,7 @@ pub fn nearest_1000_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
