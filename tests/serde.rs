@@ -4,7 +4,6 @@ use serde_json;
 extern crate kiddo;
 
 use kiddo::distance::squared_euclidean;
-use kiddo::ErrorKind;
 use kiddo::KdTree;
 
 static POINT_A: ([f64; 2], usize) = ([0f64, 0f64], 0);
@@ -16,7 +15,7 @@ static POINT_D: ([f64; 2], usize) = ([3f64, 3f64], 3);
 #[test]
 fn it_serializes_and_deserializes_properly() {
     let capacity_per_node = 2;
-    let mut kdtree = KdTree::with_capacity(capacity_per_node).unwrap();
+    let mut kdtree = KdTree::with_per_node_capacity(capacity_per_node).unwrap();
 
     kdtree.add(&POINT_A.0, POINT_A.1).unwrap();
     kdtree.add(&POINT_B.0, POINT_B.1).unwrap();

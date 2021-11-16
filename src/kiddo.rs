@@ -80,7 +80,7 @@ pub enum ErrorKind {
 }
 
 impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T, K> {
-    /// Creates a new KdTree with default capacity per node of 16
+    /// Creates a new KdTree with default capacity **per node** of 16.
     ///
     /// # Examples
     ///
@@ -93,22 +93,24 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
     pub fn new() -> Self {
-        KdTree::with_capacity(16).unwrap()
+        KdTree::with_per_node_capacity(16).unwrap()
     }
 
-    /// Creates a new KdTree with a specific capacity per node
+    /// Creates a new KdTree with a specific capacity **per node**. You may wish to
+    /// experiment by tuning this value to best suit your workload via benchmarking:
+    /// values between 10 and 40 often work best.
     ///
     /// # Examples
     ///
     /// ```rust
     /// use kiddo::KdTree;
     ///
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::with_capacity(8)?;
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::with_per_node_capacity(30)?;
     ///
     /// tree.add(&[1.0, 2.0, 5.0], 100)?;
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
-    pub fn with_capacity(capacity: usize) -> Result<Self, ErrorKind> {
+    pub fn with_per_node_capacity(capacity: usize) -> Result<Self, ErrorKind> {
         if capacity == 0 {
             return Err(ErrorKind::ZeroCapacity);
         }
@@ -123,6 +125,13 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 capacity,
             },
         })
+    }
+
+    /// Creates a new KdTree with a specific capacity **per node**.
+    ///
+    #[deprecated(since = "0.1.8", note = "with_capacity has a misleading name. Users should instead use with_per_node_capacity. with_capacity will be removed in a future release")]
+    pub fn with_capacity(capacity: usize) -> Result<Self, ErrorKind> {
+        Self::with_per_node_capacity(capacity)
     }
 
     /// Returns the current number of elements stored in the tree
@@ -865,8 +874,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                     let max = self.max_bounds[split_dimension];
                     let split_value = min + (max - min) / A::from(2.0).unwrap();
 
-                    let mut left = Box::new(KdTree::with_capacity(*capacity).unwrap());
-                    let mut right = Box::new(KdTree::with_capacity(*capacity).unwrap());
+                    let mut left = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                    let mut right = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
 
                     while !points.is_empty() {
                         let point = points.swap_remove(0);

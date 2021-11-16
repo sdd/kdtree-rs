@@ -68,7 +68,7 @@ pub fn best_1_within_small_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
@@ -96,7 +96,7 @@ pub fn best_1_within_medium_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
@@ -124,7 +124,7 @@ pub fn best_1_within_large_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
@@ -152,7 +152,7 @@ pub fn best_100_within_small_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
@@ -180,7 +180,7 @@ pub fn best_100_within_medium_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
@@ -208,7 +208,7 @@ pub fn best_100_within_large_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }

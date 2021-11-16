@@ -12,7 +12,7 @@ static POINT_D: ([f64; 2], usize) = ([3f64, 3f64], 3);
 #[test]
 fn it_works() {
     let capacity_per_node = 2;
-    let mut kdtree = KdTree::with_capacity(capacity_per_node).unwrap();
+    let mut kdtree = KdTree::with_per_node_capacity(capacity_per_node).unwrap();
 
     let count = AtomicUsize::new(0);
     let new_dist = |a: &[f64; 2], b: &[f64; 2]| {
