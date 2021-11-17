@@ -820,12 +820,15 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 ref mut bucket,
                 ..
             } => {
-                while let Some(p_index) = points.iter().position(|x| x == point) {
-                    if &bucket[p_index] == data {
-                        points.remove(p_index);
-                        bucket.remove(p_index);
+                let mut p_index = 0;
+                while p_index < self.size {
+                    if &points[p_index] == point && &bucket[p_index] == data {
+                        points.swap_remove(p_index);
+                        bucket.swap_remove(p_index);
                         removed += 1;
                         self.size -= 1;
+                    } else {
+                        p_index += 1;
                     }
                 }
             }
