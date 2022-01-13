@@ -311,3 +311,10 @@ fn handles_remove_no_match() {
         vec![(16.0, &4), (36.0, &3)]
     );
 }
+
+#[test]
+fn error_messages_do_not_overflow_stack() {
+    format!("{}", ErrorKind::NonFiniteCoordinate);
+    format!("{}", ErrorKind::ZeroCapacity);
+    format!("{}", ErrorKind::Empty);
+}

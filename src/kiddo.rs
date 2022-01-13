@@ -1005,19 +1005,16 @@ where
     }
 }
 
-impl std::error::Error for ErrorKind {
-    fn description(&self) -> &str {
-        match *self {
-            ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
-            ErrorKind::ZeroCapacity => "zero capacity",
-            ErrorKind::Empty => "invalid operation on empty tree",
-        }
-    }
-}
+impl std::error::Error for ErrorKind {}
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "KdTree error: {}", self)
+        let reason = match *self {
+            ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
+            ErrorKind::ZeroCapacity => "zero capacity",
+            ErrorKind::Empty => "invalid operation on empty tree",
+        };
+        write!(f, "KdTree error: {}", reason)
     }
 }
 
