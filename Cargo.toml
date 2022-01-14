@@ -2,7 +2,7 @@
 name = "kiddo"
 version ="0.2.2"
 authors = ["Scott Donnelly <scott@donnel.ly>", "Rui Hu <code@mrhooray.com>"]
-description = "K-dimensional tree in Rust for fast geospatial indexing and nearest neighbors lookup"
+description = "Performant and ergonomic kd tree library. Generic over number of dimensions, stored items, and axes values. Ideal for geo- and astro- NN queries"
 keywords = ["kd-tree", "kdtree", "kd", "nearest", "neighbor"]
 readme = "README.md"
 repository = "https://github.com/sdd/kiddo"

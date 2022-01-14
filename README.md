@@ -1,6 +1,7 @@
 # kiddo
 
-> A fork of kdtree. Refactored to use const generics, with some performance improvements and extra features. Thanks and kudos to mrhooray for the original kdtree library on which kiddo is based.
+> A kd tree library that has high performance and const-generic dimensions. A fork of kdtree, with significant performance improvements and extra features.
+> Thanks and kudos to mrhooray for the original kdtree library on which kiddo is based.
 
 * [Crate](https://crates.io/crates/kiddo)
 * [Documentation](https://docs.rs/kiddo)
