@@ -1,13 +1,27 @@
 extern crate kiddo;
 
 use kiddo::distance::squared_euclidean;
+use kiddo::distance::periodic_distance;
 use kiddo::ErrorKind;
 use kiddo::KdTree;
+
 
 static POINT_A: ([f64; 2], usize) = ([0f64, 0f64], 0);
 static POINT_B: ([f64; 2], usize) = ([1f64, 1f64], 1);
 static POINT_C: ([f64; 2], usize) = ([2f64, 2f64], 2);
 static POINT_D: ([f64; 2], usize) = ([3f64, 3f64], 3);
+
+static PERIODIC_2DPOINT_A: ([f64; 2], usize) = ([1.0, 5.0], 0);
+static PERIODIC_2DPOINT_B: ([f64; 2], usize) = ([9.0, 5.0], 1);
+static PERIODIC_2DPOINT_C: ([f64; 2], usize) = ([5.0, 1.0], 2);
+static PERIODIC_2DPOINT_D: ([f64; 2], usize) = ([5.0, 9.0], 3);
+
+static F64_BOXSIZE_1D: [f64; 1] = [10.0];
+static F64_BOXSIZE_2D: [f64; 2] = [10.0, 10.0];
+static F64_BOXSIZE_3D: [f64; 3] = [10.0, 10.0, 10.0];
+static F32_BOXSIZE_3D: [f32; 3] = [10.0, 10.0, 10.0];
+static F64_TOLERANCE : f64 = 1e-6;
+static F32_TOLERANCE : f32 = 1e-6;
 
 #[test]
 fn it_works() {
@@ -317,4 +331,280 @@ fn error_messages_do_not_overflow_stack() {
     format!("{}", ErrorKind::NonFiniteCoordinate);
     format!("{}", ErrorKind::ZeroCapacity);
     format!("{}", ErrorKind::Empty);
+}
+
+
+#[test]
+fn test_periodic_squared_euclidean_1d_f64(){
+
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f64; 1] = &[1.0];
+    let p2 : &[f64; 1] = &[9.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_1D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_leftright_2d_f64(){
+
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f64; 2] = &[1.0, 5.0];
+    let p2 : &[f64; 2] = &[9.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_2D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_topbottom_2d_f64(){
+
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f64; 2] = &[5.0, 1.0];
+    let p2 : &[f64; 2] = &[5.0, 9.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_2D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+
+
+#[test]
+fn test_periodic_squared_euclidean_frontback_3d_f64(){
+
+    // x-axis
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f64; 3] = &[1.0, 5.0, 5.0];
+    let p2 : &[f64; 3] = &[9.0, 5.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_leftright_3d_f64(){
+
+    // y-axis
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f64; 3] = &[5.0, 1.0, 5.0];
+    let p2 : &[f64; 3] = &[5.0, 9.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_topbottom_3d_f64(){
+
+    // z-axis
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f64; 3] = &[5.0, 5.0, 1.0];
+    let p2 : &[f64; 3] = &[5.0, 5.0, 9.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_within_frontback_3d_f64(){
+
+    // x-axis
+    // Define two points that are 2.0 units away (not wrapped)
+    let p1 : &[f64; 3] = &[4.0, 5.0, 5.0];
+    let p2 : &[f64; 3] = &[6.0, 5.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+#[test]
+fn test_periodic_squared_euclidean_within_leftright_3d_f64(){
+
+    // y-axis
+    // Define two points that are 2.0 units away (not wrapped)
+    let p1 : &[f64; 3] = &[5.0, 4.0, 5.0];
+    let p2 : &[f64; 3] = &[5.0, 6.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+#[test]
+fn test_periodic_squared_euclidean_within_topbottom_3d_f64(){
+
+    // z-axis
+    // Define two points that are 2.0 units away (not wrapped)
+    let p1 : &[f64; 3] = &[5.0, 5.0, 4.0];
+    let p2 : &[f64; 3] = &[5.0, 5.0, 6.0];
+
+    let result = periodic_distance(p1, p2, Some(F64_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F64_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_frontback_3d_f32(){
+
+    // x-axis
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f32; 3] = &[1.0, 5.0, 5.0];
+    let p2 : &[f32; 3] = &[9.0, 5.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F32_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F32_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_leftright_3d_f32(){
+
+    // y-axis
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f32; 3] = &[5.0, 1.0, 5.0];
+    let p2 : &[f32; 3] = &[5.0, 9.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F32_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F32_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_topbottom_3d_f32(){
+
+    // z-axis
+    // Define two points that are 2.0 units away (wrapped)
+    let p1 : &[f32; 3] = &[5.0, 5.0, 1.0];
+    let p2 : &[f32; 3] = &[5.0, 5.0, 9.0];
+
+    let result = periodic_distance(p1, p2, Some(F32_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F32_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_within_frontback_3d_f32(){
+
+    // x-axis
+    // Define two points that are 2.0 units away (not wrapped)
+    let p1 : &[f32; 3] = &[4.0, 5.0, 5.0];
+    let p2 : &[f32; 3] = &[6.0, 5.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F32_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F32_TOLERANCE);
+}
+#[test]
+fn test_periodic_squared_euclidean_within_leftright_3d_f32(){
+
+    // y-axis
+    // Define two points that are 2.0 units away (not wrapped)
+    let p1 : &[f32; 3] = &[5.0, 4.0, 5.0];
+    let p2 : &[f32; 3] = &[5.0, 6.0, 5.0];
+
+    let result = periodic_distance(p1, p2, Some(F32_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F32_TOLERANCE);
+}
+
+#[test]
+fn test_periodic_squared_euclidean_within_topbottom_3d_f32(){
+
+    // z-axis
+    // Define two points that are 2.0 units away (not wrapped)
+    let p1 : &[f32; 3] = &[5.0, 5.0, 4.0];
+    let p2 : &[f32; 3] = &[5.0, 5.0, 6.0];
+
+    let result = periodic_distance(p1, p2, Some(F32_BOXSIZE_3D), &squared_euclidean);
+    let expected = 2.0 * 2.0;
+
+    assert!((result-expected).abs() < F32_TOLERANCE);
+}
+#[test]
+fn test_periodic_kdtree_2d() {
+    let capacity_per_node = 2;
+    let mut kdtree = KdTree::periodic_with_per_node_capacity(capacity_per_node, F64_BOXSIZE_2D).unwrap();
+
+    kdtree.add(&PERIODIC_2DPOINT_A.0, PERIODIC_2DPOINT_A.1).unwrap();
+    kdtree.add(&PERIODIC_2DPOINT_B.0, PERIODIC_2DPOINT_B.1).unwrap();
+    kdtree.add(&PERIODIC_2DPOINT_C.0, PERIODIC_2DPOINT_C.1).unwrap();
+    kdtree.add(&PERIODIC_2DPOINT_D.0, PERIODIC_2DPOINT_D.1).unwrap();
+
+    assert_eq!(kdtree.size(), 4);
+    assert_eq!(
+        kdtree.nearest(&PERIODIC_2DPOINT_A.0, 0, &squared_euclidean).unwrap(),
+        vec![]
+    );
+    assert_eq!(
+        kdtree.nearest(&PERIODIC_2DPOINT_A.0, 1, &squared_euclidean).unwrap(),
+        vec![(0f64, &0)]
+    );
+    assert_eq!(
+        kdtree.nearest(&PERIODIC_2DPOINT_A.0, 2, &squared_euclidean).unwrap(),
+        vec![(0f64, &0), (4f64, &1)]
+    );
+    assert_eq!(
+        kdtree.nearest(&PERIODIC_2DPOINT_A.0, 3, &squared_euclidean).unwrap(),
+        vec![(0f64, &0), (4f64, &1), (32f64, &3)]
+    );
+    assert_eq!(
+        kdtree.nearest(&PERIODIC_2DPOINT_A.0, 4, &squared_euclidean).unwrap(),
+        vec![(0f64, &0), (4f64, &1), (32f64, &2), (32f64, &3)]
+    );
+    assert_eq!(
+        kdtree.nearest(&PERIODIC_2DPOINT_A.0, 5, &squared_euclidean).unwrap(),
+        vec![(0f64, &0), (4f64, &1), (32f64, &2), (32f64, &3)]
+    );
+    assert_eq!(
+        kdtree.nearest(&PERIODIC_2DPOINT_B.0, 4, &squared_euclidean).unwrap(),
+        vec![(0f64, &1), (4f64, &0), (32f64, &2), (32f64, &3)]
+    );
+
+    assert_eq!(
+        kdtree.nearest_one(&PERIODIC_2DPOINT_A.0, &squared_euclidean).unwrap(),
+        (0f64, &0)
+    );
+    assert_eq!(
+        kdtree.nearest_one(&PERIODIC_2DPOINT_B.0, &squared_euclidean).unwrap(),
+        (0f64, &1)
+    );
+
+    assert_eq!(
+        kdtree.within(&PERIODIC_2DPOINT_A.0, 0.0, &squared_euclidean).unwrap(),
+        vec![(0.0, &0)]
+    );
+    assert_eq!(
+        kdtree.within(&PERIODIC_2DPOINT_B.0, 1.0, &squared_euclidean).unwrap(),
+        vec![(0.0, &1)]
+    );
+    assert_eq!(
+        kdtree.within(&PERIODIC_2DPOINT_B.0, 32.0, &squared_euclidean).unwrap(),
+        vec![(0.0, &1), (32.0, &2), (32.0, &3)]
+    );
+
+    assert_eq!(
+        kdtree
+            .iter_nearest(&PERIODIC_2DPOINT_A.0, &squared_euclidean)
+            .unwrap()
+            .collect::<Vec<_>>(),
+        vec![(0f64, &0), (32f64, &3), (32f64, &2), (64f64, &1)]
+    );
 }

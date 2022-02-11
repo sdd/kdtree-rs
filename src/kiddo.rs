@@ -1,6 +1,8 @@
 use std::collections::BinaryHeap;
 
 use num_traits::{Float, One, Zero};
+use itertools::iproduct;
+use itertools::{Itertools, MinMaxResult};
 
 #[cfg(feature = "serialize")]
 use crate::custom_serde::*;
@@ -53,6 +55,7 @@ pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
     #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     max_bounds: [A; K],
     content: Node<A, T, K>,
+    boxsize: Option<[A; K]>,
 }
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
@@ -124,6 +127,42 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 bucket: Vec::with_capacity(capacity),
                 capacity,
             },
+            boxsize: None,
+        })
+    }
+
+    /// Creates a new KdTree with a specific capacity **per node**. You may wish to
+    /// experiment by tuning this value to best suit your workload via benchmarking:
+    /// values between 10 and 40 often work best. 
+    /// 
+    /// Implementation for periodic boundary conditions. 
+    /// Corner of box MUST be at origin.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::periodic_with_per_node_capacity(30, [1.0,1.0,1.0])?;
+    ///
+    /// tree.add(&[0.5, 0.5, 0.5], 100)?;
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn periodic_with_per_node_capacity(capacity: usize, boxsize: [A; K]) -> Result<Self, ErrorKind> {
+        if capacity == 0 {
+            return Err(ErrorKind::ZeroCapacity);
+        }
+
+        Ok(KdTree {
+            size: 0,
+            min_bounds: [A::zero(); K],
+            max_bounds: boxsize,
+            content: Node::Leaf {
+                points: Vec::with_capacity(capacity),
+                bucket: Vec::with_capacity(capacity),
+                capacity,
+            },
+            boxsize: Some(boxsize),
         })
     }
 
@@ -238,6 +277,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 distance,
                 &mut pending,
                 &mut evaluated,
+                self.boxsize
             );
         }
 
@@ -331,6 +371,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 distance,
                 &mut pending,
                 &mut evaluated,
+                self.boxsize,
             );
         }
 
@@ -590,6 +631,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
         distance: &F,
         pending: &mut BinaryHeap<HeapElement<A, &'b Self>>,
         evaluated: &mut BinaryHeap<HeapElement<A, &'b T>>,
+        boxsize: Option<[A; K]>,
     ) where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
@@ -601,7 +643,12 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 let points = points.iter();
                 let bucket = bucket.iter();
                 let iter = points.zip(bucket).map(|(p, d)| HeapElement {
-                    distance: distance(point, p),
+                    distance: { if boxsize.is_none(){
+                                    distance(point, p)
+                                } else {
+                                    periodic_distance(point, p, boxsize, distance)
+                                }
+                            },
                     element: d,
                 });
 
@@ -735,6 +782,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             pending,
             evaluated,
             distance,
+            boxsize: self.boxsize,
         })
     }
 
@@ -915,14 +963,17 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     }
 
     fn extend(&mut self, point: &[A; K]) {
-        let min = self.min_bounds.iter_mut();
-        let max = self.max_bounds.iter_mut();
-        for ((l, h), v) in min.zip(max).zip(point.iter()) {
-            if v < l {
-                *l = *v
-            }
-            if v > h {
-                *h = *v
+        // Only need to update bounds if not periodic
+        if self.boxsize.is_none() {
+            let min = self.min_bounds.iter_mut();
+            let max = self.max_bounds.iter_mut();
+            for ((l, h), v) in min.zip(max).zip(point.iter()) {
+                if v < l {
+                    *l = *v
+                }
+                if v > h {
+                    *h = *v
+                }
             }
         }
     }
@@ -948,6 +999,7 @@ pub struct NearestIter<
     pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, K>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b T>>,
     distance: &'a F,
+    boxsize: Option<[A; K]>,
 }
 
 impl<'a, 'b, A: Float + Zero + One, T: 'b, F: 'a, const K: usize> Iterator
@@ -1015,6 +1067,51 @@ impl std::fmt::Display for ErrorKind {
             ErrorKind::Empty => "invalid operation on empty tree",
         };
         write!(f, "KdTree error: {}", reason)
+    }
+}
+
+
+pub fn periodic_distance<T: Float, const K: usize>(
+    a: &[T; K],
+    b: &[T; K],
+    boxsize: Option<[T; K]>,
+    distance: &dyn Fn(&[T; K], &[T; K]) -> T,
+) -> T {
+
+    
+    // Gather 3^K distances and choose minimum
+    let mut ds : Vec<T> = Vec::with_capacity(3_usize.pow(K as u32));
+
+    // 3^K copies (incl original)
+    use std::convert::TryInto;
+    let copies : Vec<Vec<T>> = n_product::<T, K>().expect("error making copies");
+    for copy in copies {
+        let new_p1 = a.to_vec().iter().enumerate().map(|(i, &x)| x + copy[i]*boxsize.unwrap()[i]).collect::<Vec<T>>();
+        ds.push(distance(&new_p1.try_into().unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", K, v.len())), &b))
+    }
+
+    debug_assert_eq!(ds.len(), 3_usize.pow(K as u32));
+   // return min, discard max
+    *match ds.iter().minmax(){
+        MinMaxResult::MinMax(min, _max) => Ok(min),
+        _ => Err("No Min"), 
+    }.unwrap()
+
+}
+
+// Used for periodic distance calculation
+fn n_product<T: Float, const K: usize> () -> Result<Vec<Vec<T>>, String> {
+
+    let m : [T; 3] = [-T::one(), T::zero(), T::one()];
+
+    match K {
+        1 => Ok(iproduct!(m).map(|a| vec![a]).collect::<Vec<Vec<T>>>()),
+        2 => Ok(iproduct!(m, m).map(|(a, b)| vec![a, b]).collect::<Vec<Vec<T>>>()),
+        3 => Ok(iproduct!(m, m, m).map(|(a, b, c)| vec![a, b, c]).collect::<Vec<Vec<T>>>()),
+        4 => Ok(iproduct!(m, m, m, m).map(|(a, b, c, d)| vec![a, b, c, d]).collect::<Vec<Vec<T>>>()),
+        5 => Ok(iproduct!(m, m, m, m, m).map(|(a, b, c, d, e)| vec![a, b, c, d, e]).collect::<Vec<Vec<T>>>()),
+        6 => Ok(iproduct!(m, m, m, m, m, m).map(|(a, b, c, d, e, f)| vec![a, b, c, d, e, f]).collect::<Vec<Vec<T>>>()),
+        _ => Err("Dimensions not in 1..=6 not implemented".to_string())
     }
 }
 
