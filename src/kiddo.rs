@@ -291,7 +291,7 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             element: self,
         });
 
-        while !pending.is_empty() && (best_elem.is_none() || (pending[0].distance > best_dist)) {
+        while !pending.is_empty() && (best_elem.is_none() || (pending[0].distance < best_dist)) {
             self.nearest_one_step(
                 point,
                 distance,
