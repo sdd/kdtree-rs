@@ -52,7 +52,7 @@ pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
     min_bounds: [A; K],
     #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     max_bounds: [A; K],
-    content: Node<A, T, K>,
+    pub content: Node<A, T, K>,
 }
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]

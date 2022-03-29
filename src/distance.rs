@@ -2,7 +2,7 @@
 //! euclidean distance which is no more than the square root of the sum of the
 //! squares of the distances in each dimension.
 
-use num_traits::Float;
+use num_traits::{cast::FromPrimitive, Float};
 
 #[cfg(any(target_arch = "x86_64"))]
 use std::arch::x86_64::*;
@@ -32,6 +32,22 @@ pub fn squared_euclidean<T: Float, const K: usize>(a: &[T; K], b: &[T; K]) -> T 
         .zip(b.iter())
         .map(|(x, y)| ((*x) - (*y)) * ((*x) - (*y)))
         .fold(T::zero(), ::std::ops::Add::add)
+}
+
+pub fn haversine<T: Float + FromPrimitive, const K: usize>(start: &[T; K], end: &[T; K]) -> T {
+    let radius_earth: T = T::from_f64(6371.0).unwrap();
+    let two: T = T::from_f64(2.0).unwrap();
+    let one: T = T::from_f64(1.0).unwrap();
+
+    let d_lat: T = (end[1] - start[1]).to_radians();
+    let d_lon: T = (end[0] - start[0]).to_radians();
+    let lat1: T = (start[1]).to_radians();
+    let lat2: T = (end[1]).to_radians();
+
+    let a: T = ((d_lat/two).sin()) * ((d_lat/two).sin()) + ((d_lon/two).sin()) * ((d_lon/two).sin()) * (lat1.cos()) * (lat2.cos());
+    let c: T = two * ((a.sqrt()).atan2((one-a).sqrt()));
+
+    return radius_earth * c;
 }
 
 pub fn dot_product<const K: usize>(a: &[f32; K], b: &[f32; K]) -> f32 {

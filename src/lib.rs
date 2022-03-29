@@ -80,4 +80,4 @@ pub mod kiddo;
 mod util;
 
 pub use crate::kiddo::ErrorKind;
-pub use crate::kiddo::KdTree;
+pub use crate::kiddo::{KdTree, Node};
