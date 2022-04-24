@@ -68,19 +68,19 @@ pub fn best_1_within_small_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 black_box(
                     kdtree
                         .best_n_within(&point.0, 0.01, 1, &squared_euclidean)
-                        .unwrap(),
+                        ,
                 )
             });
         });
@@ -96,19 +96,19 @@ pub fn best_1_within_medium_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 black_box(
                     kdtree
                         .best_n_within(&point.0, 0.05, 1, &squared_euclidean)
-                        .unwrap(),
+                        ,
                 )
             });
         });
@@ -124,19 +124,19 @@ pub fn best_1_within_large_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 black_box(
                     kdtree
                         .best_n_within(&point.0, 0.25, 1, &squared_euclidean)
-                        .unwrap(),
+                        ,
                 )
             });
         });
@@ -152,19 +152,19 @@ pub fn best_100_within_small_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 black_box(
                     kdtree
                         .best_n_within(&point.0, 0.01, 100, &squared_euclidean)
-                        .unwrap(),
+                        ,
                 )
             });
         });
@@ -180,19 +180,19 @@ pub fn best_100_within_medium_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 black_box(
                     kdtree
                         .best_n_within(&point.0, 0.05, 100, &squared_euclidean)
-                        .unwrap(),
+                        ,
                 )
             });
         });
@@ -208,19 +208,19 @@ pub fn best_100_within_large_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 black_box(
                     kdtree
                         .best_n_within(&point.0, 0.25, 100, &squared_euclidean)
-                        .unwrap(),
+                        ,
                 )
             });
         });

@@ -28,18 +28,18 @@ pub fn add_100_2d(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_2d()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_data_2d());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 points_to_add
                     .iter()
-                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)))
             });
         });
     }
@@ -55,18 +55,18 @@ pub fn add_100_3d(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_3d()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_data_3d());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 points_to_add
                     .iter()
-                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)))
             });
         });
     }
@@ -82,18 +82,18 @@ pub fn add_100_4d(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_4d()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_data_4d());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 points_to_add
                     .iter()
-                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)))
             });
         });
     }
@@ -109,18 +109,18 @@ pub fn add_100_3d_f32(c: &mut Criterion) {
                 (0..100).into_iter().map(|_| rand_data_3d_f32()).collect();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_data_3d_f32());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
             b.iter(|| {
                 points_to_add
                     .iter()
-                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)).unwrap())
+                    .for_each(|point| black_box(kdtree.add(black_box(&point.0), point.1)))
             });
         });
     }

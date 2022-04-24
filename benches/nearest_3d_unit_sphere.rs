@@ -68,15 +68,15 @@ pub fn nearest_1_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
-            b.iter(|| black_box(kdtree.nearest_one(&point.0, &squared_euclidean)).unwrap());
+            b.iter(|| black_box(kdtree.nearest_one(&point.0, &squared_euclidean)));
         });
     }
 }
@@ -90,15 +90,15 @@ pub fn nearest_100_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
-            b.iter(|| black_box(kdtree.nearest(&point.0, 100, &squared_euclidean)).unwrap());
+            b.iter(|| black_box(kdtree.nearest(&point.0, 100, &squared_euclidean)));
         });
     }
 }
@@ -112,15 +112,15 @@ pub fn nearest_1000_euclidean2(c: &mut Criterion) {
             let point = rand_sphere_data();
 
             let mut points = vec![];
-            let mut kdtree = KdTree::with_per_node_capacity(16).unwrap();
+            let mut kdtree = KdTree::with_per_node_capacity(16);
             for _ in 0..size {
                 points.push(rand_sphere_data());
             }
             for i in 0..points.len() {
-                kdtree.add(&points[i].0, points[i].1).unwrap();
+                kdtree.add(&points[i].0, points[i].1);
             }
 
-            b.iter(|| black_box(kdtree.nearest(&point.0, 1000, &squared_euclidean)).unwrap());
+            b.iter(|| black_box(kdtree.nearest(&point.0, 1000, &squared_euclidean)));
         });
     }
 }

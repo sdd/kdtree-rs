@@ -15,12 +15,12 @@ static POINT_D: ([f64; 2], usize) = ([3f64, 3f64], 3);
 #[test]
 fn it_serializes_and_deserializes_properly() {
     let capacity_per_node = 2;
-    let mut kdtree = KdTree::with_per_node_capacity(capacity_per_node).unwrap();
+    let mut kdtree = KdTree::with_per_node_capacity(capacity_per_node);
 
-    kdtree.add(&POINT_A.0, POINT_A.1).unwrap();
-    kdtree.add(&POINT_B.0, POINT_B.1).unwrap();
-    kdtree.add(&POINT_C.0, POINT_C.1).unwrap();
-    kdtree.add(&POINT_D.0, POINT_D.1).unwrap();
+    kdtree.add(&POINT_A.0, POINT_A.1);
+    kdtree.add(&POINT_B.0, POINT_B.1);
+    kdtree.add(&POINT_C.0, POINT_C.1);
+    kdtree.add(&POINT_D.0, POINT_D.1);
 
     let serialized = serde_json::to_string(&kdtree).unwrap();
     println!("serialized: {:?}", &kdtree);
@@ -31,8 +31,7 @@ fn it_serializes_and_deserializes_properly() {
     assert_eq!(deserialized.size(), 4);
     assert_eq!(
         deserialized
-            .nearest(&POINT_A.0, 0, &squared_euclidean)
-            .unwrap(),
+            .nearest(&POINT_A.0, 0, &squared_euclidean),
         vec![]
     );
 }

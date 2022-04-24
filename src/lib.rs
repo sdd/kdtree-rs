@@ -1,6 +1,3 @@
-#![feature(adt_const_params)]
-#![feature(generic_arg_infer)]
-#![feature(generic_const_exprs)]
 #![doc(html_root_url = "https://docs.rs/kiddo/0.2.4")]
 #![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo/issues/")]
 
@@ -33,41 +30,40 @@
 //!
 //! let mut kdtree = KdTree::new();
 //!
-//! kdtree.add(&a.0, a.1)?;
-//! kdtree.add(&b.0, b.1)?;
-//! kdtree.add(&c.0, c.1)?;
-//! kdtree.add(&d.0, d.1)?;
+//! kdtree.add(&a.0, a.1);
+//! kdtree.add(&b.0, b.1);
+//! kdtree.add(&c.0, c.1);
+//! kdtree.add(&d.0, d.1);
 //!
 //! assert_eq!(kdtree.size(), 4);
 //! assert_eq!(
-//!     kdtree.nearest(&a.0, 0, &squared_euclidean)?,
+//!     kdtree.nearest(&a.0, 0, &squared_euclidean),
 //!     vec![]
 //! );
 //! assert_eq!(
-//!     kdtree.nearest(&a.0, 1, &squared_euclidean)?,
+//!     kdtree.nearest(&a.0, 1, &squared_euclidean),
 //!     vec![(0f64, &0)]
 //! );
 //! assert_eq!(
-//!     kdtree.nearest(&a.0, 2, &squared_euclidean)?,
+//!     kdtree.nearest(&a.0, 2, &squared_euclidean),
 //!     vec![(0f64, &0), (2f64, &1)]
 //! );
 //! assert_eq!(
-//!     kdtree.nearest(&a.0, 3, &squared_euclidean)?,
+//!     kdtree.nearest(&a.0, 3, &squared_euclidean),
 //!     vec![(0f64, &0), (2f64, &1), (8f64, &2)]
 //! );
 //! assert_eq!(
-//!     kdtree.nearest(&a.0, 4, &squared_euclidean)?,
+//!     kdtree.nearest(&a.0, 4, &squared_euclidean),
 //!     vec![(0f64, &0), (2f64, &1), (8f64, &2), (18f64, &3)]
 //! );
 //! assert_eq!(
-//!     kdtree.nearest(&a.0, 5, &squared_euclidean)?,
+//!     kdtree.nearest(&a.0, 5, &squared_euclidean),
 //!     vec![(0f64, &0), (2f64, &1), (8f64, &2), (18f64, &3)]
 //! );
 //! assert_eq!(
-//!     kdtree.nearest(&b.0, 4, &squared_euclidean)?,
+//!     kdtree.nearest(&b.0, 4, &squared_euclidean),
 //!     vec![(0f64, &1), (2f64, &0), (2f64, &2), (8f64, &3)]
 //! );
-//! # Ok::<(), kiddo::ErrorKind>(())
 //! ```
 
 #[cfg(feature = "serialize")]
