@@ -1,3 +1,6 @@
+#![feature(adt_const_params)]
+#![feature(generic_arg_infer)]
+#![feature(generic_const_exprs)]
 #![doc(html_root_url = "https://docs.rs/kiddo/0.2.4")]
 #![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo/issues/")]
 
