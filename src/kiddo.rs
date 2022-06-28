@@ -169,8 +169,8 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
 
         Ok(KdTree {
             size: 0,
-            min_bounds: [A::zero(); K],
-            max_bounds: periodic,
+            min_bounds: [A::infinity(); K],
+            max_bounds: [A::neg_infinity(); K],
             content: Node::Leaf {
                 points: Vec::with_capacity(capacity),
                 bucket: Vec::with_capacity(capacity),
@@ -740,16 +740,12 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 *curr = right;
             };
 
-            let candidate_to_space = if curr.periodic.is_some() {
-                A::zero()
-            } else { 
-                util::distance_to_space(
+            let candidate_to_space = util::distance_to_space(
                     point,
                     &candidate.min_bounds,
                     &candidate.max_bounds,
                     distance,
-                )
-            };
+                );
 
             if candidate_to_space <= max_dist {
                 pending.stack_push(HeapElement {
@@ -1081,15 +1077,13 @@ where
                     curr = right;
                 };
                 self.pending.push(HeapElement {
-                    distance: if self.periodic.is_some() { 
-                        A::zero() 
-                    } else { 
+                    distance: 
                         -distance_to_space(
                             point,
                             &candidate.min_bounds,
                             &candidate.max_bounds,
                             distance,
-                    )},
+                        ),
                     element: &**candidate,
                 });
             }
