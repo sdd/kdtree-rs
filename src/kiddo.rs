@@ -683,50 +683,6 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        // // If not using periodic boundary conditions, just calculate and return distance
-        // if self.periodic.is_none() {
-
-        //     return distance(a, b)
-
-        
-        // // Otherwise, calculate the minimum distance from all mirror images
-        // } else {
-            
-        //     // Initialize min to max possible distance
-        //     let mut min: A = self.periodic
-        //         .unwrap()
-        //         .iter()
-        //         .fold(
-        //             A::zero(),
-        //             |acc, &x| acc + x*x,
-        //         );
-
-        //     // Calculate distance for every image
-        //     for image_idx in 0..3_i32.pow(K as u32) {
-
-        //         // Initialize current_image template
-        //         let mut current_image: [i32; K] = [0; K];
-
-        //         // Calculate current image
-        //         for idx in 0..K {
-        //             current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-        //         }
-
-        //         // Construct current image position
-        //         let mut new_a: [A; K] = a.clone();
-        //         for idx in 0..K {
-        //             new_a[idx] = new_a[idx] + A::from(current_image[idx]).unwrap()*self.periodic.unwrap()[idx];
-        //         }
-
-        //         // Calculate distance for this image
-        //         let image_distance = distance(&new_a, b);
-
-        //         // Compare with current min
-        //         min = min.min(image_distance);
-        //     }
-
-        //     min
-        // }
         get_distance(a, b, distance, self.periodic)
     }
 
