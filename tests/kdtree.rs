@@ -611,23 +611,17 @@ fn test_periodic_kdtree_2d() {
     let capacity_per_node = 4;
     let mut kdtree = KdTree::periodic_with_per_node_capacity(capacity_per_node, F64_BOXSIZE_2D).unwrap();
 
-    println!("adding first point");
     kdtree.add(&PERIODIC_2DPOINT_A.0, PERIODIC_2DPOINT_A.1).unwrap();
-    println!("adding second point");
     kdtree.add(&PERIODIC_2DPOINT_B.0, PERIODIC_2DPOINT_B.1).unwrap();
-    println!("adding third point");
     kdtree.add(&PERIODIC_2DPOINT_C.0, PERIODIC_2DPOINT_C.1).unwrap();
-    println!("adding fourth point");
     kdtree.add(&PERIODIC_2DPOINT_D.0, PERIODIC_2DPOINT_D.1).unwrap();
-    println!("added all points");
 
-    // assert_eq!(kdtree.size(), 4);
-    println!("getting 0th neighbor");
+    assert_eq!(kdtree.size(), 4);
+
     assert_eq!(
         kdtree.nearest(&PERIODIC_2DPOINT_A.0, 0, &squared_euclidean).unwrap(),
         vec![]
     );
-    println!("getting 1st neighbor");
     assert_eq!(
         kdtree.nearest(&PERIODIC_2DPOINT_A.0, 1, &squared_euclidean).unwrap(),
         vec![(0f64, &0)]
@@ -648,18 +642,7 @@ fn test_periodic_kdtree_2d() {
         kdtree.nearest(&PERIODIC_2DPOINT_A.0, 5, &squared_euclidean).unwrap(),
         vec![(0f64, &0), (9f64, &1), (13f64, &3), (20f64, &2)]
     );
-
-    println!(
-        "{}({}) {}({}) {}({}) {}({})",
-        squared_euclidean(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_A.0),
-        kiddo::kiddo::get_distance(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_A.0, &squared_euclidean, Some(F64_BOXSIZE_2D)),
-        squared_euclidean(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_B.0),
-        kiddo::kiddo::get_distance(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_B.0, &squared_euclidean, Some(F64_BOXSIZE_2D)),
-        squared_euclidean(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_C.0),
-        kiddo::kiddo::get_distance(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_C.0, &squared_euclidean, Some(F64_BOXSIZE_2D)),
-        squared_euclidean(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_D.0),
-        kiddo::kiddo::get_distance(&PERIODIC_2DPOINT_B.0, &PERIODIC_2DPOINT_D.0, &squared_euclidean, Some(F64_BOXSIZE_2D)),
-    );
+    
     assert_eq!(
         kdtree.nearest(&PERIODIC_2DPOINT_B.0, 4, &squared_euclidean).unwrap(),
         vec![(0f64, &1), (9f64, &0), (20f64, &3), (41f64, &2)]

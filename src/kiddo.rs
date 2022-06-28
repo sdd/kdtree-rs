@@ -1029,7 +1029,7 @@ pub struct NearestIter<
 }
 
 
-impl<'a, 'b, A: Float + Zero + One + std::fmt::Debug, T: 'b, F: 'a, const K: usize> Iterator
+impl<'a, 'b, A: Float + Zero + One, T: 'b, F: 'a, const K: usize> Iterator
     for NearestIter<'a, 'b, A, T, F, K>
 where
     F: Fn(&[A; K], &[A; K]) -> A,
