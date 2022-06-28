@@ -75,6 +75,7 @@ pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
+    PeriodicOutOfBounds,
     NonFiniteCoordinate,
     ZeroCapacity,
     Empty,
@@ -1005,11 +1006,35 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     }
 
     fn check_point(&self, point: &[A; K]) -> Result<(), ErrorKind> {
-        if point.iter().all(|n| n.is_finite()) {
-            Ok(())
-        } else {
-            Err(ErrorKind::NonFiniteCoordinate)
+
+        // First check that point is finite
+        if !point.iter().all(|n| n.is_finite()) {
+            return Err(ErrorKind::NonFiniteCoordinate)
         }
+
+        // Then check that point is in the bounds when periodic BCs are on
+        if self.periodic.is_some() {
+
+            // Used several times, so unwrap once here.
+            let periodic = self.periodic.unwrap();
+
+            // Check if any component is above or below the bound specified in `periodic`
+            let (above_bound, below_bound) = periodic
+                .iter()
+                .fold((false, false), |mut acc, &x| {
+                    for idx in 0..K {
+                        acc = (acc.0 || x > periodic[idx], acc.1 || x < periodic[idx]);
+                    }
+                    acc
+                });
+
+            // If so, then return 
+            if above_bound || below_bound {
+                return Err(ErrorKind::PeriodicOutOfBounds)
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1150,6 +1175,7 @@ impl std::error::Error for ErrorKind {}
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let reason = match *self {
+            ErrorKind::PeriodicOutOfBounds => "out-of-bounds when using periodic boundary conditions",
             ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
             ErrorKind::ZeroCapacity => "zero capacity",
             ErrorKind::Empty => "invalid operation on empty tree",
