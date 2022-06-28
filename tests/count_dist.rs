@@ -9,6 +9,7 @@ static POINT_B: ([f64; 2], usize) = ([1f64, 1f64], 1);
 static POINT_C: ([f64; 2], usize) = ([2f64, 2f64], 2);
 static POINT_D: ([f64; 2], usize) = ([3f64, 3f64], 3);
 
+
 #[test]
 fn it_works() {
     let capacity_per_node = 2;
