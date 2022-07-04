@@ -76,6 +76,7 @@ pub enum Node<'a, A, T: std::cmp::PartialEq, const K: usize> {
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
+    OutOfPeriodicBounds,
     NonFiniteCoordinate,
     ZeroCapacity,
     Empty,
@@ -1529,11 +1530,21 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     }
 
     fn check_point(&self, point: &[A; K]) -> Result<(), ErrorKind> {
-        if point.iter().all(|n| n.is_finite()) {
-            Ok(())
-        } else {
-            Err(ErrorKind::NonFiniteCoordinate)
+        for p in point {
+            if !p.is_finite(){
+                return Err(ErrorKind::NonFiniteCoordinate)
+            }
         }
+
+        if let Some(periodic) = self.periodic {
+            for (idx, &p) in point.iter().enumerate() {
+                if p < A::zero() || p > periodic[idx] {
+                    return Err(ErrorKind::OutOfPeriodicBounds)
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1612,6 +1623,7 @@ impl std::error::Error for ErrorKind {}
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let reason = match *self {
+            ErrorKind::OutOfPeriodicBounds => "out of bounds while using periodic boundary conditions",
             ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
             ErrorKind::ZeroCapacity => "zero capacity",
             ErrorKind::Empty => "invalid operation on empty tree",
