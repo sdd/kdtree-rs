@@ -1608,7 +1608,7 @@ impl std::error::Error for ErrorKind {}
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let reason = match *self {
-            ErrorKind::OutOfPeriodicBounds => "out of bounds while using periodic boundary conditions",
+            ErrorKind::OutOfPeriodicBounds => "point is out of bounds (periodic boundary conditions)",
             ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
             ErrorKind::ZeroCapacity => "zero capacity",
             ErrorKind::Empty => "invalid operation on empty tree",
