@@ -127,6 +127,56 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
                 bucket: Vec::with_capacity(capacity),
                 capacity,
             },
+            periodic: None,
+        })
+    }
+
+    /// Creates a new KdTree with default capacity **per node** of 16.
+    /// Obeys periodic boundary conditions.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn new_periodic(periodic: &'a [A; K]) -> Self {
+        KdTree::periodic_with_per_node_capacity(16, periodic).unwrap()
+    }
+
+    /// Creates a new KdTree with a specific capacity **per node**. You may wish to
+    /// experiment by tuning this value to best suit your workload via benchmarking:
+    /// values between 10 and 40 often work best.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::with_per_node_capacity(30)?;
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn periodic_with_per_node_capacity(capacity: usize, periodic: &'a [A; K]) -> Result<Self, ErrorKind> {
+        if capacity == 0 {
+            return Err(ErrorKind::ZeroCapacity);
+        }
+
+        Ok(KdTree {
+            size: 0,
+            min_bounds: [A::infinity(); K],
+            max_bounds: [A::neg_infinity(); K],
+            content: Node::Leaf {
+                points: Vec::with_capacity(capacity),
+                bucket: Vec::with_capacity(capacity),
+                capacity,
+            },
+            periodic: Some(periodic),
         })
     }
 
