@@ -139,7 +139,8 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     /// ```rust
     /// use kiddo::KdTree;
     ///
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new_periodic(&PERIODIC);
     ///
     /// tree.add(&[1.0, 2.0, 5.0], 100)?;
     /// # Ok::<(), kiddo::ErrorKind>(())
@@ -265,6 +266,9 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
+        if let Some(periodic) = self.periodic {
+            return self.nearest_periodic(point, num, distance, periodic);
+        } else {
         self.check_point(point)?;
 
         let num = std::cmp::min(num, self.size);
@@ -300,31 +304,10 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
             .take(num)
             .map(Into::into)
             .collect())
+        }
     }
 
-    /// Queries the tree to find the nearest `num` elements to `point`, using the specified
-    /// distance metric function. Obeys periodic boundary conditions.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kiddo::KdTree;
-    /// use kiddo::distance::squared_euclidean;
-    ///
-    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
-    ///
-    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
-    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
-    ///
-    /// let nearest = tree.nearest_periodic(&[1.0, 2.0, 5.1], 1, &squared_euclidean, &PERIODIC)?;
-    ///
-    /// assert_eq!(nearest.len(), 1);
-    /// assert!((nearest[0].0 - 0.01f64).abs() < f64::EPSILON);
-    /// assert_eq!(*nearest[0].1, 100);
-    /// # Ok::<(), kiddo::ErrorKind>(())
-    /// ```
-    pub fn nearest_periodic<F>(
+    fn nearest_periodic<F>(
         &self,
         point: &[A; K],
         num: usize,
@@ -498,6 +481,9 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
+        if let Some(periodic) = self.periodic {
+            return self.nearest_one_periodic(point, distance, periodic)
+        }
         if self.size == 0 {
             return Err(ErrorKind::Empty);
         }
@@ -526,31 +512,7 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
         Ok((best_dist, best_elem.unwrap()))
     }
 
-        /// Queries the tree to find the nearest element to `point`, using the specified
-    /// distance metric function. Faster than querying for nearest(point, 1, ...) due
-    /// to not needing to allocate a Vec for the result
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kiddo::KdTree;
-    /// use kiddo::distance::squared_euclidean;
-    ///
-    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
-    ///
-    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
-    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
-    ///
-    /// let nearest = tree.nearest_one_periodic(&[1.0, 2.0, 5.1], &squared_euclidean, &PERIODIC)?;
-    ///
-    /// assert!((nearest.0 - 0.01f64).abs() < f64::EPSILON);
-    /// assert_eq!(*nearest.1, 100);
-    /// # Ok::<(), kiddo::ErrorKind>(())
-    /// ```
-    // TODO: pending only ever gets to about 7 items max. try doing this
-    //       recursively to avoid the alloc/dealloc of the vec
-    pub fn nearest_one_periodic<F>(&self, point: &[A; K], distance: &F, periodic: &[A; K]) -> Result<(A, &T), ErrorKind>
+    fn nearest_one_periodic<F>(&self, point: &[A; K], distance: &F, periodic: &[A; K]) -> Result<(A, &T), ErrorKind>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
@@ -689,7 +651,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        self.check_point(point)?;
 
         let mut pending = BinaryHeap::new();
         let mut evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
@@ -742,42 +703,25 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        if self.size == 0 {
-            return Ok(vec![]);
-        }
+        self.check_point(point)?;
+        if let Some(periodic) = self.periodic {
+            return self.within_periodic(point, radius, distance, periodic)
+        } else {
+            if self.size == 0 {
+                return Ok(vec![]);
+            }
 
-        self.within_impl(point, radius, distance).map(|evaluated| {
-            evaluated
-                .into_sorted_vec()
-                .into_iter()
-                .map(Into::into)
-                .collect()
-        })
+            self.within_impl(point, radius, distance).map(|evaluated| {
+                evaluated
+                    .into_sorted_vec()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect()
+            })
+        }
     }
 
-    /// Queries the tree to find all elements within `radius` of `point`, using the specified
-    /// distance metric function. Results are returned sorted nearest-first. Obeys periodic
-    /// boundary conditions
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kiddo::KdTree;
-    /// use kiddo::distance::squared_euclidean;
-    ///
-    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
-    ///
-    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
-    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
-    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
-    ///
-    /// let within = tree.within_periodic(&[1.0, 2.0, 5.0], 10f64, &squared_euclidean, &PERIODIC)?;
-    ///
-    /// assert_eq!(within.len(), 2);
-    /// # Ok::<(), kiddo::ErrorKind>(())
-    /// ```
-    pub fn within_periodic<F>(
+    fn within_periodic<F>(
         &self,
         point: &[A; K],
         radius: A,
@@ -924,37 +868,19 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        if self.size == 0 {
-            return Ok(vec![]);
-        }
+        if let Some(periodic) = self.periodic {
+            return self.within_unsorted_periodic(point, radius, distance, periodic)
+        } else {
+            if self.size == 0 {
+                return Ok(vec![]);
+            }
 
-        self.within_impl(point, radius, distance)
-            .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())
+            self.within_impl(point, radius, distance)
+                .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())
+        }
     }
 
-        /// Queries the tree to find all elements within `radius` of `point`, using the specified
-    /// distance metric function. Results are returned sorted nearest-first. Obeys periodic
-    /// boundary conditions
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kiddo::KdTree;
-    /// use kiddo::distance::squared_euclidean;
-    ///
-    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
-    ///
-    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
-    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
-    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
-    ///
-    /// let within = tree.within_unsorted_periodic(&[1.0, 2.0, 5.0], 10f64, &squared_euclidean, &PERIODIC)?;
-    ///
-    /// assert_eq!(within.len(), 2);
-    /// # Ok::<(), kiddo::ErrorKind>(())
-    /// ```
-    pub fn within_unsorted_periodic<F>(
+    fn within_unsorted_periodic<F>(
         &self,
         point: &[A; K],
         radius: A,
@@ -1529,8 +1455,16 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
                     let max = self.max_bounds[split_dimension];
                     let split_value = min + (max - min) / A::from(2.0).unwrap();
 
-                    let mut left = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
-                    let mut right = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                    let mut left;
+                    let mut right;
+                    if let Some(periodic) = self.periodic {
+                        left = Box::new(KdTree::periodic_with_per_node_capacity(*capacity, periodic).unwrap());
+                        right = Box::new(KdTree::periodic_with_per_node_capacity(*capacity, periodic).unwrap());
+                    } else {
+                        left = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                        right = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                    }
+
 
                     while !points.is_empty() {
                         let point = points.swap_remove(0);
