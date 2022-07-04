@@ -6,6 +6,7 @@ use num_traits::{Float, One, Zero};
 use crate::custom_serde::*;
 use crate::heap_element::HeapElement;
 use crate::util;
+use num_traits::Signed;
 
 trait Stack<T>
 where
@@ -79,7 +80,7 @@ pub enum ErrorKind {
     Empty,
 }
 
-impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T, K> {
+impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdTree<A, T, K> {
     /// Creates a new KdTree with default capacity **per node** of 16.
     ///
     /// # Examples
@@ -249,6 +250,175 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
             .collect())
     }
 
+    /// Queries the tree to find the nearest `num` elements to `point`, using the specified
+    /// distance metric function. Obeys periodic boundary conditions.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    ///
+    /// let nearest = tree.nearest_periodic(&[1.0, 2.0, 5.1], 1, &squared_euclidean, &PERIODIC)?;
+    ///
+    /// assert_eq!(nearest.len(), 1);
+    /// assert!((nearest[0].0 - 0.01f64).abs() < f64::EPSILON);
+    /// assert_eq!(*nearest[0].1, 100);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn nearest_periodic<F>(
+        &self,
+        point: &[A; K],
+        num: usize,
+        distance: &F,
+        periodic: &[A; K],
+    ) -> Result<Vec<(A, &T)>, ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
+    {
+        self.check_point(point)?;
+
+        let num = std::cmp::min(num, self.size);
+        if num == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut pending = BinaryHeap::new();
+        let mut evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
+
+        pending.push(HeapElement {
+            distance: A::zero(),
+            element: self,
+        });
+
+        while !pending.is_empty()
+            && (evaluated.len() < num
+                || (-pending.peek().unwrap().distance <= evaluated.peek().unwrap().distance))
+        {
+            self.nearest_step(
+                point,
+                num,
+                A::infinity(),
+                distance,
+                &mut pending,
+                &mut evaluated,
+            );
+        }
+
+        // Find largest distance for canonical image
+        let largest_distance: A = evaluated
+            .iter()
+            .fold(A::zero(), |acc, x| acc.max(x.distance));
+        
+
+        // Find closest dist2 to every side
+        let mut closest_side_dist2: [A; K] = [A::zero(); K];
+        for side in 0..K {
+
+            // Do a single index here. This is equal to distance to lower side
+            let query_component: A = point[side];
+
+            // Get distance to upper half
+            let upper = periodic[side] - query_component;
+
+            // !negative includes zero
+            debug_assert!(!upper.is_negative()); 
+            debug_assert!(!query_component.is_negative());
+
+            // Choose lesser of two and then square
+            closest_side_dist2[side] = upper.min(query_component).powi(2);
+        }
+
+        // Find which images we need to check.
+        // Initialize vector with canonical image (which we will remove later)
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        for image in 1..2_usize.pow(K as u32) {
+            
+            // Closest image in the form of bool array
+            let closest_image = (0..K)
+                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+
+            // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
+            let dist_to_side_edge_or_other: A = closest_image
+                .clone()
+                .enumerate()
+                .flat_map(|(side, flag)| if flag {
+                    
+                    // Get minimum of dist2 to lower and upper side
+                    Some(closest_side_dist2[side])
+                } else { None })
+                .fold(A::zero(), |acc, x| acc + x);
+
+            if dist_to_side_edge_or_other < largest_distance {
+
+                let mut image_to_check = point.clone();
+                
+                for (idx, flag) in closest_image.enumerate() {
+
+                    // If moving image along this dimension
+                    if flag {
+                        // Do a single index here. This is equal to distance to lower side
+                        let query_component: A = point[idx];
+                        // Single index here as well
+                        let periodic_component = periodic[idx];
+
+                        if query_component < periodic_component / A::from(2_u8).unwrap() {
+                            // Add if in lower half of box
+                            image_to_check[idx] = query_component + periodic_component;
+                        } else {
+                            // Subtract if in upper half of box
+                            image_to_check[idx] = query_component - periodic_component;
+                        }
+                        
+                    }
+                }
+
+                images_to_check.push(image_to_check);
+            }
+        }
+
+        // Then check all images
+        for image in &images_to_check {
+    
+            let mut image_pending = BinaryHeap::new();
+            let mut image_evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
+    
+            image_pending.push(HeapElement {
+                distance: A::zero(),
+                element: self,
+            });
+    
+            while !image_pending.is_empty()
+                && (image_evaluated.len() < num
+                    || (-image_pending.peek().unwrap().distance <= image_evaluated.peek().unwrap().distance))
+            {
+                self.nearest_step(
+                    image,
+                    num,
+                    A::infinity(),
+                    distance,
+                    &mut image_pending,
+                    &mut image_evaluated,
+                );
+            }
+
+            evaluated.append(&mut image_evaluated);
+        }
+
+        Ok(evaluated
+            .into_sorted_vec()
+            .into_iter()
+            .take(num)
+            .map(Into::into)
+            .collect())
+    }
+
     /// Queries the tree to find the nearest element to `point`, using the specified
     /// distance metric function. Faster than querying for nearest(point, 1, ...) due
     /// to not needing to allocate a Vec for the result
@@ -299,6 +469,160 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
                 &mut best_dist,
                 &mut best_elem,
             );
+        }
+
+        Ok((best_dist, best_elem.unwrap()))
+    }
+
+        /// Queries the tree to find the nearest element to `point`, using the specified
+    /// distance metric function. Faster than querying for nearest(point, 1, ...) due
+    /// to not needing to allocate a Vec for the result
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    ///
+    /// let nearest = tree.nearest_one_periodic(&[1.0, 2.0, 5.1], &squared_euclidean, &PERIODIC)?;
+    ///
+    /// assert!((nearest.0 - 0.01f64).abs() < f64::EPSILON);
+    /// assert_eq!(*nearest.1, 100);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    // TODO: pending only ever gets to about 7 items max. try doing this
+    //       recursively to avoid the alloc/dealloc of the vec
+    pub fn nearest_one_periodic<F>(&self, point: &[A; K], distance: &F, periodic: &[A; K]) -> Result<(A, &T), ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
+    {
+        if self.size == 0 {
+            return Err(ErrorKind::Empty);
+        }
+        self.check_point(point)?;
+
+        let mut pending = Vec::with_capacity(16);
+
+        let mut best_dist: A = A::infinity();
+        let mut best_elem: Option<&T> = None;
+
+        pending.push(HeapElement {
+            distance: A::zero(),
+            element: self,
+        });
+
+        while !pending.is_empty() && (best_elem.is_none() || (pending[0].distance < best_dist)) {
+            self.nearest_one_step(
+                point,
+                distance,
+                &mut pending,
+                &mut best_dist,
+                &mut best_elem,
+            );
+        }
+
+        // Get canonical_image result as in non-PBC
+        let canonical_image_result = (best_dist, best_elem.unwrap());
+
+        // Find closest dist2 to every side
+        let mut closest_side_dist2: [A; K] = [A::zero(); K];
+        for side in 0..K {
+
+            // Do a single index here. This is equal to distance to lower side
+            let query_component: A = point[side];
+
+            // Get distance to upper half
+            let upper = periodic[side] - query_component;
+
+            // !negative includes zero
+            debug_assert!(!upper.is_negative()); 
+            debug_assert!(!query_component.is_negative());
+
+            // Choose lesser of two and then square
+            closest_side_dist2[side] = upper.min(query_component).powi(2);
+        }
+
+        // Find which images we need to check.
+        // Initialize vector with canonical image (which we will remove later)
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        for image in 1..2_usize.pow(K as u32) {
+            
+            // Closest image in the form of bool array
+            let closest_image = (0..K)
+                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+
+            // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
+            let dist_to_side_edge_or_other: A = closest_image
+                .clone()
+                .enumerate()
+                .flat_map(|(side, flag)| if flag {
+                    
+                    // Get minimum of dist2 to lower and upper side
+                    Some(closest_side_dist2[side])
+                } else { None })
+                .fold(A::zero(), |acc, x| acc + x);
+
+            if dist_to_side_edge_or_other < canonical_image_result.0 {
+
+                let mut image_to_check = point.clone();
+                
+                for (idx, flag) in closest_image.enumerate() {
+
+                    // If moving image along this dimension
+                    if flag {
+                        // Do a single index here. This is equal to distance to lower side
+                        let query_component: A = point[idx];
+                        // Single index here as well
+                        let periodic_component = periodic[idx];
+
+                        if query_component < periodic_component / A::from(2_u8).unwrap() {
+                            // Add if in lower half of box
+                            image_to_check[idx] = query_component + periodic_component;
+                        } else {
+                            // Subtract if in upper half of box
+                            image_to_check[idx] = query_component - periodic_component;
+                        }
+                        
+                    }
+                }
+
+                images_to_check.push(image_to_check);
+            }
+        }
+
+        // Then check all images
+        for image in &images_to_check {
+
+            let mut image_pending = Vec::with_capacity(16);
+
+            let mut image_best_dist: A = A::infinity();
+            let mut image_best_elem: Option<&T> = None;
+
+            image_pending.push(HeapElement {
+                distance: A::zero(),
+                element: self,
+            });
+
+            while !image_pending.is_empty() && (image_best_elem.is_none() || (image_pending[0].distance < image_best_dist)) {
+                self.nearest_one_step(
+                    image,
+                    distance,
+                    &mut image_pending,
+                    &mut image_best_dist,
+                    &mut image_best_elem,
+                );
+            }
+
+            if image_best_dist < best_dist {
+                best_dist = image_best_dist;
+                best_elem = image_best_elem;
+            }
         }
 
         Ok((best_dist, best_elem.unwrap()))
@@ -380,6 +704,146 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
     }
 
     /// Queries the tree to find all elements within `radius` of `point`, using the specified
+    /// distance metric function. Results are returned sorted nearest-first. Obeys periodic
+    /// boundary conditions
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
+    ///
+    /// let within = tree.within_periodic(&[1.0, 2.0, 5.0], 10f64, &squared_euclidean, &PERIODIC)?;
+    ///
+    /// assert_eq!(within.len(), 2);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn within_periodic<F>(
+        &self,
+        point: &[A; K],
+        radius: A,
+        distance: &F,
+        periodic: &[A; K],
+    ) -> Result<Vec<(A, &T)>, ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
+    {
+        if self.size == 0 {
+            return Ok(vec![]);
+        }
+
+        // do as in within() but hold off on sorting
+        let mut canonical_result: Vec<(A, &T)> = self.within_impl(point, radius, distance).map(|evaluated| {
+            evaluated
+                .into_vec()
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        })?;
+
+
+        // Find closest dist2 to every side
+        let mut closest_side_dist2: [A; K] = [A::zero(); K];
+        for side in 0..K {
+
+            // Do a single index here. This is equal to distance to lower side
+            let query_component: A = point[side];
+
+            // Get distance to upper half
+            let upper = periodic[side] - query_component;
+
+            // !negative includes zero
+            debug_assert!(!upper.is_negative()); 
+            debug_assert!(!query_component.is_negative());
+
+            // Choose lesser of two and then square
+            closest_side_dist2[side] = upper.min(query_component).powi(2);
+        }
+
+        // Find which images we need to check.
+        // Initialize vector with canonical image (which we will remove later)
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        for image in 1..2_usize.pow(K as u32) {
+            
+            // Closest image in the form of bool array
+            let closest_image = (0..K)
+                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+
+            // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
+            let dist_to_side_edge_or_other: A = closest_image
+                .clone()
+                .enumerate()
+                .flat_map(|(side, flag)| if flag {
+                    
+                    // Get minimum of dist2 to lower and upper side
+                    Some(closest_side_dist2[side])
+                } else { None })
+                .fold(A::zero(), |acc, x| acc + x);
+
+            if dist_to_side_edge_or_other < radius {
+
+                let mut image_to_check = point.clone();
+                
+                for (idx, flag) in closest_image.enumerate() {
+
+                    // If moving image along this dimension
+                    if flag {
+                        // Do a single index here. This is equal to distance to lower side
+                        let query_component: A = point[idx];
+                        // Single index here as well
+                        let periodic_component = periodic[idx];
+
+                        if query_component < periodic_component / A::from(2_u8).unwrap() {
+                            // Add if in lower half of box
+                            image_to_check[idx] = query_component + periodic_component;
+                        } else {
+                            // Subtract if in upper half of box
+                            image_to_check[idx] = query_component - periodic_component;
+                        }
+                        
+                    }
+                }
+
+                images_to_check.push(image_to_check);
+            }
+        }
+
+        // Then check all images
+        for image in &images_to_check {
+
+            let mut image_pending = Vec::with_capacity(16);
+
+            image_pending.push(HeapElement {
+                distance: A::zero(),
+                element: self,
+            });
+
+            // Get all points within the radius for this image
+            let mut image_result = self.within_impl(image, radius, distance).map(|evaluated| {
+                evaluated
+                    .into_vec()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect()
+            })?;
+
+            canonical_result.append(&mut image_result)
+        }
+
+        // Now sort
+        canonical_result.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        Ok(canonical_result)
+    }
+
+    /// Queries the tree to find all elements within `radius` of `point`, using the specified
     /// distance metric function. Results are returned in arbitrary order. Faster than within()
     ///
     /// # Examples
@@ -414,6 +878,142 @@ impl<A: Float + Zero + One, T: std::cmp::PartialEq, const K: usize> KdTree<A, T,
 
         self.within_impl(point, radius, distance)
             .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())
+    }
+
+        /// Queries the tree to find all elements within `radius` of `point`, using the specified
+    /// distance metric function. Results are returned sorted nearest-first. Obeys periodic
+    /// boundary conditions
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    /// use kiddo::distance::squared_euclidean;
+    ///
+    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new();
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// tree.add(&[2.0, 3.0, 6.0], 101)?;
+    /// tree.add(&[200.0, 300.0, 600.0], 102)?;
+    ///
+    /// let within = tree.within_unsorted_periodic(&[1.0, 2.0, 5.0], 10f64, &squared_euclidean, &PERIODIC)?;
+    ///
+    /// assert_eq!(within.len(), 2);
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn within_unsorted_periodic<F>(
+        &self,
+        point: &[A; K],
+        radius: A,
+        distance: &F,
+        periodic: &[A; K],
+    ) -> Result<Vec<(A, &T)>, ErrorKind>
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
+    {
+        if self.size == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut canonical_result: Vec<(A, &T)> = self.within_impl(point, radius, distance).map(|evaluated| {
+            evaluated
+                .into_vec()
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        })?;
+
+
+        // Find closest dist2 to every side
+        let mut closest_side_dist2: [A; K] = [A::zero(); K];
+        for side in 0..K {
+
+            // Do a single index here. This is equal to distance to lower side
+            let query_component: A = point[side];
+
+            // Get distance to upper half
+            let upper = periodic[side] - query_component;
+
+            // !negative includes zero
+            debug_assert!(!upper.is_negative()); 
+            debug_assert!(!query_component.is_negative());
+
+            // Choose lesser of two and then square
+            closest_side_dist2[side] = upper.min(query_component).powi(2);
+        }
+
+        // Find which images we need to check.
+        // Initialize vector with canonical image (which we will remove later)
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        for image in 1..2_usize.pow(K as u32) {
+            
+            // Closest image in the form of bool array
+            let closest_image = (0..K)
+                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+
+            // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
+            let dist_to_side_edge_or_other: A = closest_image
+                .clone()
+                .enumerate()
+                .flat_map(|(side, flag)| if flag {
+                    
+                    // Get minimum of dist2 to lower and upper side
+                    Some(closest_side_dist2[side])
+                } else { None })
+                .fold(A::zero(), |acc, x| acc + x);
+
+            if dist_to_side_edge_or_other < radius {
+
+                let mut image_to_check = point.clone();
+                
+                for (idx, flag) in closest_image.enumerate() {
+
+                    // If moving image along this dimension
+                    if flag {
+                        // Do a single index here. This is equal to distance to lower side
+                        let query_component: A = point[idx];
+                        // Single index here as well
+                        let periodic_component = periodic[idx];
+
+                        if query_component < periodic_component / A::from(2_u8).unwrap() {
+                            // Add if in lower half of box
+                            image_to_check[idx] = query_component + periodic_component;
+                        } else {
+                            // Subtract if in upper half of box
+                            image_to_check[idx] = query_component - periodic_component;
+                        }
+                        
+                    }
+                }
+
+                images_to_check.push(image_to_check);
+            }
+        }
+
+        // Then check all images
+        for image in &images_to_check {
+
+            let mut image_pending = Vec::with_capacity(16);
+
+            image_pending.push(HeapElement {
+                distance: A::zero(),
+                element: self,
+            });
+
+            // Get all points within the radius for this image
+            let mut image_result = self.within_impl(image, radius, distance).map(|evaluated| {
+                evaluated
+                    .into_vec()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect()
+            })?;
+
+            canonical_result.append(&mut image_result)
+        }
+
+        Ok(canonical_result)
     }
 
     /// Queries the tree to find the best `n` elements within `radius` of `point`, using the specified
@@ -950,7 +1550,7 @@ pub struct NearestIter<
     distance: &'a F,
 }
 
-impl<'a, 'b, A: Float + Zero + One, T: 'b, F: 'a, const K: usize> Iterator
+impl<'a, 'b, A: Float + Zero + One + Signed, T: 'b, F: 'a, const K: usize> Iterator
     for NearestIter<'a, 'b, A, T, F, K>
 where
     F: Fn(&[A; K], &[A; K]) -> A,
