@@ -46,22 +46,23 @@ where
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
-pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
+pub struct KdTree<'a, A, T: std::cmp::PartialEq, const K: usize> {
     size: usize,
 
     #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     min_bounds: [A; K],
     #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     max_bounds: [A; K],
-    content: Node<A, T, K>,
+    content: Node<'a, A, T, K>,
+    periodic: Option<&'a [A; K]>,
 }
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
-pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
+pub enum Node<'a, A, T: std::cmp::PartialEq, const K: usize> {
     Stem {
-        left: Box<KdTree<A, T, K>>,
-        right: Box<KdTree<A, T, K>>,
+        left: Box<KdTree<'a, A, T, K>>,
+        right: Box<KdTree<'a, A, T, K>>,
         split_value: A,
         split_dimension: u8,
     },
@@ -80,7 +81,7 @@ pub enum ErrorKind {
     Empty,
 }
 
-impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdTree<A, T, K> {
+impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdTree<'a, A, T, K> {
     /// Creates a new KdTree with default capacity **per node** of 16.
     ///
     /// # Examples
@@ -1256,12 +1257,12 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
         }
     }
 
-    fn populate_pending<'a, F>(
+    fn populate_pending<'b, F>(
         point: &[A; K],
         max_dist: A,
         distance: &F,
-        pending: &mut impl Stack<HeapElement<A, &'a Self>>,
-        curr: &mut &'a Self,
+        pending: &mut impl Stack<HeapElement<A, &'b Self>>,
+        curr: &mut &'b Self,
     ) where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
@@ -1312,11 +1313,11 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
     /// assert_eq!(*nearest_first.1, 100);
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
-    pub fn iter_nearest<'a, 'b, F>(
-        &'b self,
-        point: &'a [A; K],
-        distance: &'a F,
-    ) -> Result<NearestIter<'a, 'b, A, T, F, K>, ErrorKind>
+    pub fn iter_nearest<'b, 'c, F>(
+        &'c self,
+        point: &'b [A; K],
+        distance: &'b F,
+    ) -> Result<NearestIter<'b, 'c, 'a, A, T, F, K>, ErrorKind>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
@@ -1539,19 +1540,20 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
 pub struct NearestIter<
     'a,
     'b,
+    'c,
     A: 'a + 'b + Float,
     T: 'b + PartialEq,
     F: 'a + Fn(&[A; K], &[A; K]) -> A,
     const K: usize,
 > {
     point: &'a [A; K],
-    pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, K>>>,
+    pending: BinaryHeap<HeapElement<A, &'b KdTree<'c, A, T, K>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b T>>,
     distance: &'a F,
 }
 
-impl<'a, 'b, A: Float + Zero + One + Signed, T: 'b, F: 'a, const K: usize> Iterator
-    for NearestIter<'a, 'b, A, T, F, K>
+impl<'a, 'b, 'c, A: Float + Zero + One + Signed, T: 'b, F: 'a, const K: usize> Iterator
+    for NearestIter<'a, 'b, 'c, A, T, F, K>
 where
     F: Fn(&[A; K], &[A; K]) -> A,
     T: PartialEq,
