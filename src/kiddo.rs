@@ -54,6 +54,7 @@ pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
     #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     max_bounds: [A; K],
     content: Node<A, T, K>,
+    periodic: Option<[A; K]>,
 }
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
@@ -75,6 +76,7 @@ pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
+    PeriodicOutOfBounds,
     NonFiniteCoordinate,
     ZeroCapacity,
     Empty,
@@ -95,6 +97,22 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
     /// ```
     pub fn new() -> Self {
         KdTree::with_per_node_capacity(16).unwrap()
+    }
+
+    /// Creates a new KdTree with default capacity **per node** of 16, with periodic boundary conditions.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new_periodic([5.0,5.0,5.0]);
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn new_periodic(periodic: [A; K]) -> Self {
+        KdTree::periodic_with_per_node_capacity(16, periodic).unwrap()
     }
 
     /// Creates a new KdTree with a specific capacity **per node**. You may wish to
@@ -125,6 +143,41 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
                 bucket: Vec::with_capacity(capacity),
                 capacity,
             },
+            periodic: None,
+        })
+    }
+
+    /// Creates a new KdTree with a specific capacity **per node**, and wih perodic
+    /// boundary conditions. You may wish to experiment by tuning this value to 
+    /// best suit your workload via benchmarking: values between 10 and 40 often 
+    /// work best.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kiddo::KdTree;
+    ///
+    /// let mut tree: KdTree<f64, usize, 3> = 
+    ///     KdTree::periodic_with_per_node_capacity(30, [6.0, 6.0, 6.0])?;
+    ///
+    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
+    /// # Ok::<(), kiddo::ErrorKind>(())
+    /// ```
+    pub fn periodic_with_per_node_capacity(capacity: usize, periodic: [A; K]) -> Result<Self, ErrorKind> {
+        if capacity == 0 {
+            return Err(ErrorKind::ZeroCapacity);
+        }
+
+        Ok(KdTree {
+            size: 0,
+            min_bounds: [A::infinity(); K],
+            max_bounds: [A::neg_infinity(); K],
+            content: Node::Leaf {
+                points: Vec::with_capacity(capacity),
+                bucket: Vec::with_capacity(capacity),
+                capacity,
+            },
+            periodic: Some(periodic),
         })
     }
 
@@ -1161,7 +1214,7 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
                 let points = points.iter();
                 let bucket = bucket.iter();
                 let iter = points.zip(bucket).map(|(p, d)| HeapElement {
-                    distance: distance(point, p),
+                    distance: self.get_distance(point, p, distance),
                     element: d,
                 });
 
@@ -1201,7 +1254,7 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
                 let points = points.iter();
                 let bucket = bucket.iter();
                 let iter = points.zip(bucket).map(|(p, d)| HeapElement {
-                    distance: distance(point, p),
+                    distance: self.get_distance(point, p, distance),
                     element: d,
                 });
 
@@ -1220,6 +1273,18 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
             }
             Node::Stem { .. } => unreachable!(),
         }
+    }
+
+    fn get_distance<F>(
+        &self,
+        a: &[A; K],
+        b: &[A; K],
+        distance: &F,
+    ) -> A
+    where
+        F: Fn(&[A; K], &[A; K]) -> A,
+    {
+        get_distance(a, b, distance, self.periodic)
     }
 
     fn nearest_one_step<'b, F>(
@@ -1241,7 +1306,7 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
                 let points = points.iter();
                 let bucket = bucket.iter();
                 let iter = points.zip(bucket).map(|(p, d)| HeapElement {
-                    distance: distance(point, p),
+                    distance: self.get_distance(point, p, distance),
                     element: d,
                 });
 
@@ -1276,11 +1341,11 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
             };
 
             let candidate_to_space = util::distance_to_space(
-                point,
-                &candidate.min_bounds,
-                &candidate.max_bounds,
-                distance,
-            );
+                    point,
+                    &candidate.min_bounds,
+                    &candidate.max_bounds,
+                    distance,
+                );
 
             if candidate_to_space <= max_dist {
                 pending.stack_push(HeapElement {
@@ -1335,6 +1400,7 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
             pending,
             evaluated,
             distance,
+            periodic: self.periodic
         })
     }
 
@@ -1475,10 +1541,18 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
                 if let Some(split_dimension) = split_dimension {
                     let min = self.min_bounds[split_dimension];
                     let max = self.max_bounds[split_dimension];
-                    let split_value = min + (max - min) / A::from(2.0).unwrap();
+                    let split_value = min + (max - min) / A::from(2.0_f64).unwrap();
 
-                    let mut left = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
-                    let mut right = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                    let mut left;
+                    let mut right;
+                    if self.periodic.is_some() {
+                       left = Box::new(KdTree::periodic_with_per_node_capacity(*capacity, self.periodic.unwrap()).unwrap());
+                       right = Box::new(KdTree::periodic_with_per_node_capacity(*capacity, self.periodic.unwrap()).unwrap());
+                    } else {
+                       left = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                       right = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                    }
+
 
                     while !points.is_empty() {
                         let point = points.swap_remove(0);
@@ -1528,11 +1602,35 @@ impl<A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdT
     }
 
     fn check_point(&self, point: &[A; K]) -> Result<(), ErrorKind> {
-        if point.iter().all(|n| n.is_finite()) {
-            Ok(())
-        } else {
-            Err(ErrorKind::NonFiniteCoordinate)
+
+        // First check that point is finite
+        if !point.iter().all(|n| n.is_finite()) {
+            return Err(ErrorKind::NonFiniteCoordinate)
         }
+
+        // Then check that point is in the bounds when periodic BCs are on
+        if self.periodic.is_some() {
+
+            // Used several times, so unwrap once here.
+            let periodic = self.periodic.unwrap();
+
+            // Check if any component is above or below the bound specified in `periodic`
+            let (above_bound, below_bound) = periodic
+                .iter()
+                .fold((false, false), |mut acc, &x| {
+                    for idx in 0..K {
+                        acc = (acc.0 || x > periodic[idx], acc.1 || x < periodic[idx]);
+                    }
+                    acc
+                });
+
+            // If so, then return 
+            if above_bound || below_bound {
+                return Err(ErrorKind::PeriodicOutOfBounds)
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1548,6 +1646,7 @@ pub struct NearestIter<
     pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, K>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b T>>,
     distance: &'a F,
+    periodic: Option<[A; K]>,
 }
 
 impl<'a, 'b, A: Float + Zero + One + Signed, T: 'b, F: 'a, const K: usize> Iterator
@@ -1577,16 +1676,19 @@ where
                     curr = right;
                 };
                 self.pending.push(HeapElement {
-                    distance: -distance_to_space(
-                        point,
-                        &candidate.min_bounds,
-                        &candidate.max_bounds,
-                        distance,
-                    ),
+                    distance: 
+                        -distance_to_space(
+                            point,
+                            &candidate.min_bounds,
+                            &candidate.max_bounds,
+                            distance,
+                        ),
                     element: &**candidate,
                 });
             }
 
+            // Local clone of periodic to satisfy borrow checker before mut borrow
+            let periodic = self.periodic.clone();
             match &curr.content {
                 Node::Leaf { points, bucket, .. } => {
                     let points = points.iter();
@@ -1594,7 +1696,7 @@ where
 
                     self.evaluated
                         .extend(points.zip(bucket).map(|(p, d)| HeapElement {
-                            distance: -distance(point, p),
+                            distance: -get_distance(point, p, distance, periodic),
                             element: d,
                         }));
                 }
@@ -1605,11 +1707,68 @@ where
     }
 }
 
+pub fn get_distance<'a, 'b, A, F, const K: usize>(
+    a: &[A; K],
+    b: &[A; K],
+    distance: &F,
+    periodic: Option<[A; K]>,
+) -> A
+where
+    A: 'a + 'b + Float,
+    F: Fn(&[A; K], &[A; K]) -> A,
+{
+    // If not using periodic boundary conditions, just calculate and return distance
+    if periodic.is_none() {
+
+        return distance(a, b)
+
+    
+    // Otherwise, calculate the minimum distance from all mirror images
+    } else {
+        
+        // Initialize min to max possible distance
+        let mut min: A = periodic
+            .unwrap()
+            .iter()
+            .fold(
+                A::zero(),
+                |acc, &x| acc + x*x,
+            );
+
+        // Calculate distance for every image
+        for image_idx in 0..3_i32.pow(K as u32) {
+
+            // Initialize current_image template
+            let mut current_image: [i32; K] = [0; K];
+
+            // Calculate current image
+            for idx in 0..K {
+                current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
+            }
+
+            // Construct current image position
+            let mut new_a: [A; K] = a.clone();
+            for idx in 0..K {
+                new_a[idx] = new_a[idx] + A::from(current_image[idx]).unwrap()*periodic.unwrap()[idx];
+            }
+
+            // Calculate distance for this image
+            let image_distance = distance(&new_a, b);
+
+            // Compare with current min
+            min = min.min(image_distance);
+        }
+
+        min
+    }
+}
+
 impl std::error::Error for ErrorKind {}
 
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let reason = match *self {
+            ErrorKind::PeriodicOutOfBounds => "out-of-bounds when using periodic boundary conditions",
             ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
             ErrorKind::ZeroCapacity => "zero capacity",
             ErrorKind::Empty => "invalid operation on empty tree",
