@@ -151,14 +151,15 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
     /// Creates a new KdTree with a specific capacity **per node**. You may wish to
     /// experiment by tuning this value to best suit your workload via benchmarking:
-    /// values between 10 and 40 often work best.
+    /// values between 10 and 40 often work best. Obeys periodic boundary conditions.
     ///
     /// # Examples
     ///
     /// ```rust
     /// use kiddo::KdTree;
     ///
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::with_per_node_capacity(30)?;
+    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
+    /// let mut tree: KdTree<f64, usize, 3> = KdTree::periodic_with_per_node_capacity(30, &PERIODIC)?;
     ///
     /// tree.add(&[1.0, 2.0, 5.0], 100)?;
     /// # Ok::<(), kiddo::ErrorKind>(())
