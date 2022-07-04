@@ -409,7 +409,7 @@ fn test_periodic_1d_nearest() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -436,8 +436,8 @@ fn test_periodic_1d_nearest() {
     // Query points
     let knns: Vec<(f64, &usize)> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.nearest_one_periodic(&q, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.nearest_one(&q, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -508,7 +508,7 @@ fn test_periodic_2d_nearest() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -535,8 +535,8 @@ fn test_periodic_2d_nearest() {
     // Query points
     let knns: Vec<(f64, &usize)> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.nearest_one_periodic(&q, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.nearest_one(&q, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -607,7 +607,7 @@ fn test_periodic_3d_nearest() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -634,8 +634,8 @@ fn test_periodic_3d_nearest() {
     // Query points
     let knns: Vec<(f64, &usize)> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.nearest_one_periodic(&q, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.nearest_one(&q, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -711,7 +711,7 @@ fn test_periodic_1d_nearest_n() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -738,8 +738,8 @@ fn test_periodic_1d_nearest_n() {
     // Query points
     let knns: Vec<Vec<(f64, &usize)>> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.nearest_periodic(&q, N, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.nearest(&q, N, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -816,7 +816,7 @@ fn test_periodic_2d_nearest_n() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -843,8 +843,8 @@ fn test_periodic_2d_nearest_n() {
     // Query points
     let knns: Vec<Vec<(f64, &usize)>> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.nearest_periodic(&q, N, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.nearest(&q, N, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -921,7 +921,7 @@ fn test_periodic_3d_nearest_n() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -948,8 +948,8 @@ fn test_periodic_3d_nearest_n() {
     // Query points
     let knns: Vec<Vec<(f64, &usize)>> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.nearest_periodic(&q, N, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.nearest(&q, N, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -1028,7 +1028,7 @@ fn test_periodic_1d_within() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -1055,8 +1055,8 @@ fn test_periodic_1d_within() {
     // Query points
     let knns: Vec<Vec<(f64, &usize)>> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.within_periodic(&q, RADIUS, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.within(&q, RADIUS, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -1135,7 +1135,7 @@ fn test_periodic_2d_within() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -1162,8 +1162,8 @@ fn test_periodic_2d_within() {
     // Query points
     let knns: Vec<Vec<(f64, &usize)>> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.within_periodic(&q, RADIUS, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.within(&q, RADIUS, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
@@ -1242,7 +1242,8 @@ fn test_periodic_3d_within() {
     let mut rng = rand::thread_rng();
 
     // Initialize KdTree
-    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    println!("initializing tree");
+    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
 
     // Initialize data points (aka point cloud)
     let mut data = vec![[0.0; K]; NDATA];
@@ -1269,8 +1270,8 @@ fn test_periodic_3d_within() {
     // Query points
     let knns: Vec<Vec<(f64, &usize)>> = (&query)
         .into_par_iter()
-        .map_with((&tree, &PERIODIC), |(t, p), q| {
-            t.within_periodic(&q, RADIUS, &squared_euclidean, p).unwrap()
+        .map_with(&tree, |t, q| {
+            t.within(&q, RADIUS, &squared_euclidean).unwrap()
         }).collect::<Vec<_>>();
 
     // Check vs brute force
