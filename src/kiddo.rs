@@ -46,23 +46,22 @@ where
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
-pub struct KdTree<'a, A, T: std::cmp::PartialEq, const K: usize> {
+pub struct KdTree<A, T: std::cmp::PartialEq, const K: usize> {
     size: usize,
 
     #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     min_bounds: [A; K],
     #[cfg_attr(feature = "serialize", serde(with = "arrays"))]
     max_bounds: [A; K],
-    content: Node<'a, A, T, K>,
-    periodic: Option<&'a [A; K]>,
+    content: Node<A, T, K>,
 }
 
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
-pub enum Node<'a, A, T: std::cmp::PartialEq, const K: usize> {
+pub enum Node<A, T: std::cmp::PartialEq, const K: usize> {
     Stem {
-        left: Box<KdTree<'a, A, T, K>>,
-        right: Box<KdTree<'a, A, T, K>>,
+        left: Box<KdTree<A, T, K>>,
+        right: Box<KdTree<A, T, K>>,
         split_value: A,
         split_dimension: u8,
     },
@@ -82,7 +81,7 @@ pub enum ErrorKind {
     Empty,
 }
 
-impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize> KdTree<'a, A, T, K> {
+impl<A: Float + Zero + One, T: PartialEq, const K: usize> KdTree<A, T, K> {
     /// Creates a new KdTree with default capacity **per node** of 16.
     ///
     /// # Examples
@@ -126,59 +125,7 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
                 points: Vec::with_capacity(capacity),
                 bucket: Vec::with_capacity(capacity),
                 capacity,
-            },
-            periodic: None,
-        })
-    }
-
-    /// Creates a new KdTree with default capacity **per node** of 16.
-    /// Obeys periodic boundary conditions.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kiddo::KdTree;
-    ///
-    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::new_periodic(&PERIODIC);
-    ///
-    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
-    /// # Ok::<(), kiddo::ErrorKind>(())
-    /// ```
-    pub fn new_periodic(periodic: &'a [A; K]) -> Self {
-        KdTree::periodic_with_per_node_capacity(16, periodic).unwrap()
-    }
-
-    /// Creates a new KdTree with a specific capacity **per node**. You may wish to
-    /// experiment by tuning this value to best suit your workload via benchmarking:
-    /// values between 10 and 40 often work best. Obeys periodic boundary conditions.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kiddo::KdTree;
-    ///
-    /// const PERIODIC: [f64; 3] = [10.0, 10.0, 10.0];
-    /// let mut tree: KdTree<f64, usize, 3> = KdTree::periodic_with_per_node_capacity(30, &PERIODIC)?;
-    ///
-    /// tree.add(&[1.0, 2.0, 5.0], 100)?;
-    /// # Ok::<(), kiddo::ErrorKind>(())
-    /// ```
-    pub fn periodic_with_per_node_capacity(capacity: usize, periodic: &'a [A; K]) -> Result<Self, ErrorKind> {
-        if capacity == 0 {
-            return Err(ErrorKind::ZeroCapacity);
-        }
-
-        Ok(KdTree {
-            size: 0,
-            min_bounds: [A::infinity(); K],
-            max_bounds: [A::neg_infinity(); K],
-            content: Node::Leaf {
-                points: Vec::with_capacity(capacity),
-                bucket: Vec::with_capacity(capacity),
-                capacity,
-            },
-            periodic: Some(periodic),
+            }
         })
     }
 
@@ -267,9 +214,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        if let Some(periodic) = self.periodic {
-            return self.nearest_periodic(point, num, distance, periodic);
-        } else {
         self.check_point(point)?;
 
         let num = std::cmp::min(num, self.size);
@@ -305,20 +249,19 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
             .take(num)
             .map(Into::into)
             .collect())
-        }
     }
 
-    fn nearest_periodic<F>(
+    pub fn nearest_periodic<F>(
         &self,
         point: &[A; K],
         num: usize,
         distance: &F,
-        periodic: &[A; K],
+        period: &[A; K],
     ) -> Result<Vec<(A, &T)>, ErrorKind>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        self.check_point(point)?;
+        self.check_point_periodic(point, period)?;
 
         let num = std::cmp::min(num, self.size);
         if num == 0 {
@@ -351,21 +294,17 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
         let largest_distance: A = evaluated
             .iter()
             .fold(A::zero(), |acc, x| acc.max(x.distance));
-        
 
         // Find closest dist2 to every side
         let mut closest_side_dist2: [A; K] = [A::zero(); K];
         for side in 0..K {
-
             // Do a single index here. This is equal to distance to lower side
             let query_component: A = point[side];
 
             // Get distance to upper half
-            let upper = periodic[side] - query_component;
-
-            // !negative includes zero
-            debug_assert!(!upper.is_negative()); 
-            debug_assert!(!query_component.is_negative());
+            debug_assert!(query_component >= A::zero());
+            let upper = period[side] - query_component;
+            debug_assert!(period[side] >= A::zero());
 
             // Choose lesser of two and then square
             closest_side_dist2[side] = upper.min(query_component).powi(2);
@@ -373,45 +312,43 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Find which images we need to check.
         // Initialize vector with canonical image (which we will remove later)
-        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32) - 1);
         for image in 1..2_usize.pow(K as u32) {
-            
             // Closest image in the form of bool array
-            let closest_image = (0..K)
-                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+            let closest_image = (0..K).map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
 
             // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
             let dist_to_side_edge_or_other: A = closest_image
                 .clone()
                 .enumerate()
-                .flat_map(|(side, flag)| if flag {
-                    
-                    // Get minimum of dist2 to lower and upper side
-                    Some(closest_side_dist2[side])
-                } else { None })
+                .flat_map(|(side, flag)| {
+                    if flag {
+                        // Get minimum of dist2 to lower and upper side
+                        Some(closest_side_dist2[side])
+                    } else {
+                        None
+                    }
+                })
                 .fold(A::zero(), |acc, x| acc + x);
 
             if dist_to_side_edge_or_other < largest_distance {
+                let mut image_to_check = *point;
 
-                let mut image_to_check = point.clone();
-                
                 for (idx, flag) in closest_image.enumerate() {
-
                     // If moving image along this dimension
                     if flag {
                         // Do a single index here. This is equal to distance to lower side
                         let query_component: A = point[idx];
                         // Single index here as well
-                        let periodic_component = periodic[idx];
+                        let period_component = period[idx];
 
-                        if query_component < periodic_component / A::from(2_u8).unwrap() {
+                        if query_component < period_component / A::from(2_u8).unwrap() {
                             // Add if in lower half of box
-                            image_to_check[idx] = query_component + periodic_component;
+                            image_to_check[idx] = query_component + period_component;
                         } else {
                             // Subtract if in upper half of box
-                            image_to_check[idx] = query_component - periodic_component;
+                            image_to_check[idx] = query_component - period_component;
                         }
-                        
                     }
                 }
 
@@ -421,18 +358,18 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Then check all images
         for image in &images_to_check {
-    
             let mut image_pending = BinaryHeap::new();
             let mut image_evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
-    
+
             image_pending.push(HeapElement {
                 distance: A::zero(),
                 element: self,
             });
-    
+
             while !image_pending.is_empty()
                 && (image_evaluated.len() < num
-                    || (-image_pending.peek().unwrap().distance <= image_evaluated.peek().unwrap().distance))
+                    || (-image_pending.peek().unwrap().distance
+                        <= image_evaluated.peek().unwrap().distance))
             {
                 self.nearest_step(
                     image,
@@ -482,9 +419,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        if let Some(periodic) = self.periodic {
-            return self.nearest_one_periodic(point, distance, periodic)
-        }
         if self.size == 0 {
             return Err(ErrorKind::Empty);
         }
@@ -513,14 +447,19 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
         Ok((best_dist, best_elem.unwrap()))
     }
 
-    fn nearest_one_periodic<F>(&self, point: &[A; K], distance: &F, periodic: &[A; K]) -> Result<(A, &T), ErrorKind>
+    pub fn nearest_one_periodic<F>(
+        &self,
+        point: &[A; K],
+        distance: &F,
+        period: &[A; K],
+    ) -> Result<(A, &T), ErrorKind>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
         if self.size == 0 {
             return Err(ErrorKind::Empty);
         }
-        self.check_point(point)?;
+        self.check_point_periodic(point, period)?;
 
         let mut pending = Vec::with_capacity(16);
 
@@ -548,16 +487,12 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
         // Find closest dist2 to every side
         let mut closest_side_dist2: [A; K] = [A::zero(); K];
         for side in 0..K {
-
             // Do a single index here. This is equal to distance to lower side
             let query_component: A = point[side];
 
             // Get distance to upper half
-            let upper = periodic[side] - query_component;
-
-            // !negative includes zero
-            debug_assert!(!upper.is_negative()); 
-            debug_assert!(!query_component.is_negative());
+            debug_assert!(query_component >= A::zero());
+            let upper = period[side] - query_component;
 
             // Choose lesser of two and then square
             closest_side_dist2[side] = upper.min(query_component).powi(2);
@@ -565,45 +500,43 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Find which images we need to check.
         // Initialize vector with canonical image (which we will remove later)
-        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32) - 1);
         for image in 1..2_usize.pow(K as u32) {
-            
             // Closest image in the form of bool array
-            let closest_image = (0..K)
-                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+            let closest_image = (0..K).map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
 
             // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
             let dist_to_side_edge_or_other: A = closest_image
                 .clone()
                 .enumerate()
-                .flat_map(|(side, flag)| if flag {
-                    
-                    // Get minimum of dist2 to lower and upper side
-                    Some(closest_side_dist2[side])
-                } else { None })
+                .flat_map(|(side, flag)| {
+                    if flag {
+                        // Get minimum of dist2 to lower and upper side
+                        Some(closest_side_dist2[side])
+                    } else {
+                        None
+                    }
+                })
                 .fold(A::zero(), |acc, x| acc + x);
 
             if dist_to_side_edge_or_other < canonical_image_result.0 {
+                let mut image_to_check = *point;
 
-                let mut image_to_check = point.clone();
-                
                 for (idx, flag) in closest_image.enumerate() {
-
                     // If moving image along this dimension
                     if flag {
                         // Do a single index here. This is equal to distance to lower side
                         let query_component: A = point[idx];
                         // Single index here as well
-                        let periodic_component = periodic[idx];
+                        let period_component = period[idx];
 
-                        if query_component < periodic_component / A::from(2_u8).unwrap() {
+                        if query_component < period_component / A::from(2_u8).unwrap() {
                             // Add if in lower half of box
-                            image_to_check[idx] = query_component + periodic_component;
+                            image_to_check[idx] = query_component + period_component;
                         } else {
                             // Subtract if in upper half of box
-                            image_to_check[idx] = query_component - periodic_component;
+                            image_to_check[idx] = query_component - period_component;
                         }
-                        
                     }
                 }
 
@@ -613,7 +546,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Then check all images
         for image in &images_to_check {
-
             let mut image_pending = Vec::with_capacity(16);
 
             let mut image_best_dist: A = A::infinity();
@@ -624,7 +556,9 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
                 element: self,
             });
 
-            while !image_pending.is_empty() && (image_best_elem.is_none() || (image_pending[0].distance < image_best_dist)) {
+            while !image_pending.is_empty()
+                && (image_best_elem.is_none() || (image_pending[0].distance < image_best_dist))
+            {
                 self.nearest_one_step(
                     image,
                     distance,
@@ -652,7 +586,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-
         let mut pending = BinaryHeap::new();
         let mut evaluated = BinaryHeap::<HeapElement<A, &T>>::new();
 
@@ -705,29 +638,25 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
         F: Fn(&[A; K], &[A; K]) -> A,
     {
         self.check_point(point)?;
-        if let Some(periodic) = self.periodic {
-            return self.within_periodic(point, radius, distance, periodic)
-        } else {
-            if self.size == 0 {
-                return Ok(vec![]);
-            }
-
-            self.within_impl(point, radius, distance).map(|evaluated| {
-                evaluated
-                    .into_sorted_vec()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect()
-            })
+        if self.size == 0 {
+            return Ok(vec![]);
         }
+
+        self.within_impl(point, radius, distance).map(|evaluated| {
+            evaluated
+                .into_sorted_vec()
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        })
     }
 
-    fn within_periodic<F>(
+    pub fn within_periodic<F>(
         &self,
         point: &[A; K],
         radius: A,
         distance: &F,
-        periodic: &[A; K],
+        period: &[A; K],
     ) -> Result<Vec<(A, &T)>, ErrorKind>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
@@ -737,28 +666,20 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
         }
 
         // do as in within() but hold off on sorting
-        let mut canonical_result: Vec<(A, &T)> = self.within_impl(point, radius, distance).map(|evaluated| {
-            evaluated
-                .into_vec()
-                .into_iter()
-                .map(Into::into)
-                .collect()
-        })?;
-
+        let mut canonical_result: Vec<(A, &T)> = self
+            .within_impl(point, radius, distance)
+            .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())?;
 
         // Find closest dist2 to every side
         let mut closest_side_dist2: [A; K] = [A::zero(); K];
         for side in 0..K {
-
             // Do a single index here. This is equal to distance to lower side
             let query_component: A = point[side];
 
             // Get distance to upper half
-            let upper = periodic[side] - query_component;
-
-            // !negative includes zero
-            debug_assert!(!upper.is_negative()); 
-            debug_assert!(!query_component.is_negative());
+            debug_assert!(query_component >= A::zero());
+            let upper = period[side] - query_component;
+            debug_assert!(upper >= A::zero());
 
             // Choose lesser of two and then square
             closest_side_dist2[side] = upper.min(query_component).powi(2);
@@ -766,45 +687,43 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Find which images we need to check.
         // Initialize vector with canonical image (which we will remove later)
-        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32) - 1);
         for image in 1..2_usize.pow(K as u32) {
-            
             // Closest image in the form of bool array
-            let closest_image = (0..K)
-                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+            let closest_image = (0..K).map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
 
             // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
             let dist_to_side_edge_or_other: A = closest_image
                 .clone()
                 .enumerate()
-                .flat_map(|(side, flag)| if flag {
-                    
-                    // Get minimum of dist2 to lower and upper side
-                    Some(closest_side_dist2[side])
-                } else { None })
+                .flat_map(|(side, flag)| {
+                    if flag {
+                        // Get minimum of dist2 to lower and upper side
+                        Some(closest_side_dist2[side])
+                    } else {
+                        None
+                    }
+                })
                 .fold(A::zero(), |acc, x| acc + x);
 
             if dist_to_side_edge_or_other < radius {
+                let mut image_to_check = *point;
 
-                let mut image_to_check = point.clone();
-                
                 for (idx, flag) in closest_image.enumerate() {
-
                     // If moving image along this dimension
                     if flag {
                         // Do a single index here. This is equal to distance to lower side
                         let query_component: A = point[idx];
                         // Single index here as well
-                        let periodic_component = periodic[idx];
+                        let period_component = period[idx];
 
-                        if query_component < periodic_component / A::from(2_u8).unwrap() {
+                        if query_component < period_component / A::from(2_u8).unwrap() {
                             // Add if in lower half of box
-                            image_to_check[idx] = query_component + periodic_component;
+                            image_to_check[idx] = query_component + period_component;
                         } else {
                             // Subtract if in upper half of box
-                            image_to_check[idx] = query_component - periodic_component;
+                            image_to_check[idx] = query_component - period_component;
                         }
-                        
                     }
                 }
 
@@ -814,7 +733,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Then check all images
         for image in &images_to_check {
-
             let mut image_pending = Vec::with_capacity(16);
 
             image_pending.push(HeapElement {
@@ -823,13 +741,9 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
             });
 
             // Get all points within the radius for this image
-            let mut image_result = self.within_impl(image, radius, distance).map(|evaluated| {
-                evaluated
-                    .into_vec()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect()
-            })?;
+            let mut image_result = self
+                .within_impl(image, radius, distance)
+                .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())?;
 
             canonical_result.append(&mut image_result)
         }
@@ -869,19 +783,15 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
-        if let Some(periodic) = self.periodic {
-            return self.within_unsorted_periodic(point, radius, distance, periodic)
-        } else {
-            if self.size == 0 {
-                return Ok(vec![]);
-            }
-
-            self.within_impl(point, radius, distance)
-                .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())
+        if self.size == 0 {
+            return Ok(vec![]);
         }
+
+        self.within_impl(point, radius, distance)
+            .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())
     }
 
-    fn within_unsorted_periodic<F>(
+    pub fn within_unsorted_periodic<F>(
         &self,
         point: &[A; K],
         radius: A,
@@ -895,28 +805,20 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
             return Ok(vec![]);
         }
 
-        let mut canonical_result: Vec<(A, &T)> = self.within_impl(point, radius, distance).map(|evaluated| {
-            evaluated
-                .into_vec()
-                .into_iter()
-                .map(Into::into)
-                .collect()
-        })?;
-
+        let mut canonical_result: Vec<(A, &T)> = self
+            .within_impl(point, radius, distance)
+            .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())?;
 
         // Find closest dist2 to every side
         let mut closest_side_dist2: [A; K] = [A::zero(); K];
         for side in 0..K {
-
             // Do a single index here. This is equal to distance to lower side
             let query_component: A = point[side];
 
             // Get distance to upper half
+            debug_assert!(query_component >= A::zero());
             let upper = periodic[side] - query_component;
-
-            // !negative includes zero
-            debug_assert!(!upper.is_negative()); 
-            debug_assert!(!query_component.is_negative());
+            debug_assert!(upper >= A::zero());
 
             // Choose lesser of two and then square
             closest_side_dist2[side] = upper.min(query_component).powi(2);
@@ -924,30 +826,29 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Find which images we need to check.
         // Initialize vector with canonical image (which we will remove later)
-        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32)-1);
+        let mut images_to_check = Vec::with_capacity(2_usize.pow(K as u32) - 1);
         for image in 1..2_usize.pow(K as u32) {
-            
             // Closest image in the form of bool array
-            let closest_image = (0..K)
-                .map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
+            let closest_image = (0..K).map(|idx| ((image / 2_usize.pow(idx as u32)) % 2) == 1);
 
             // Find distance to corresponding side, edge, vertex or other higher dimensional equivalent
             let dist_to_side_edge_or_other: A = closest_image
                 .clone()
                 .enumerate()
-                .flat_map(|(side, flag)| if flag {
-                    
-                    // Get minimum of dist2 to lower and upper side
-                    Some(closest_side_dist2[side])
-                } else { None })
+                .flat_map(|(side, flag)| {
+                    if flag {
+                        // Get minimum of dist2 to lower and upper side
+                        Some(closest_side_dist2[side])
+                    } else {
+                        None
+                    }
+                })
                 .fold(A::zero(), |acc, x| acc + x);
 
             if dist_to_side_edge_or_other < radius {
+                let mut image_to_check = *point;
 
-                let mut image_to_check = point.clone();
-                
                 for (idx, flag) in closest_image.enumerate() {
-
                     // If moving image along this dimension
                     if flag {
                         // Do a single index here. This is equal to distance to lower side
@@ -962,7 +863,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
                             // Subtract if in upper half of box
                             image_to_check[idx] = query_component - periodic_component;
                         }
-                        
                     }
                 }
 
@@ -972,7 +872,6 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
         // Then check all images
         for image in &images_to_check {
-
             let mut image_pending = Vec::with_capacity(16);
 
             image_pending.push(HeapElement {
@@ -981,13 +880,9 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
             });
 
             // Get all points within the radius for this image
-            let mut image_result = self.within_impl(image, radius, distance).map(|evaluated| {
-                evaluated
-                    .into_vec()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect()
-            })?;
+            let mut image_result = self
+                .within_impl(image, radius, distance)
+                .map(|evaluated| evaluated.into_vec().into_iter().map(Into::into).collect())?;
 
             canonical_result.append(&mut image_result)
         }
@@ -1295,7 +1190,7 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
         &'c self,
         point: &'b [A; K],
         distance: &'b F,
-    ) -> Result<NearestIter<'b, 'c, 'a, A, T, F, K>, ErrorKind>
+    ) -> Result<NearestIter<'b, 'c, A, T, F, K>, ErrorKind>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
@@ -1456,16 +1351,8 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
                     let max = self.max_bounds[split_dimension];
                     let split_value = min + (max - min) / A::from(2.0).unwrap();
 
-                    let mut left;
-                    let mut right;
-                    if let Some(periodic) = self.periodic {
-                        left = Box::new(KdTree::periodic_with_per_node_capacity(*capacity, periodic).unwrap());
-                        right = Box::new(KdTree::periodic_with_per_node_capacity(*capacity, periodic).unwrap());
-                    } else {
-                        left = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
-                        right = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
-                    }
-
+                    let mut left = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
+                    let mut right = Box::new(KdTree::with_per_node_capacity(*capacity).unwrap());
 
                     while !points.is_empty() {
                         let point = points.swap_remove(0);
@@ -1516,16 +1403,20 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 
     fn check_point(&self, point: &[A; K]) -> Result<(), ErrorKind> {
         for p in point {
-            if !p.is_finite(){
-                return Err(ErrorKind::NonFiniteCoordinate)
+            if !p.is_finite() {
+                return Err(ErrorKind::NonFiniteCoordinate);
             }
         }
 
-        if let Some(periodic) = self.periodic {
-            for (idx, &p) in point.iter().enumerate() {
-                if p < A::zero() || p > periodic[idx] {
-                    return Err(ErrorKind::OutOfPeriodicBounds)
-                }
+        Ok(())
+    }
+
+    fn check_point_periodic(&self, point: &[A; K], period: &[A; K]) -> Result<(), ErrorKind> {
+        self.check_point(point)?;
+
+        for (idx, &p) in point.iter().enumerate() {
+            if p < A::zero() || p > period[idx] {
+                return Err(ErrorKind::OutOfPeriodicBounds);
             }
         }
 
@@ -1536,20 +1427,19 @@ impl<'a, A: Float + Zero + One + Signed, T: std::cmp::PartialEq, const K: usize>
 pub struct NearestIter<
     'a,
     'b,
-    'c,
     A: 'a + 'b + Float,
     T: 'b + PartialEq,
     F: 'a + Fn(&[A; K], &[A; K]) -> A,
     const K: usize,
 > {
     point: &'a [A; K],
-    pending: BinaryHeap<HeapElement<A, &'b KdTree<'c, A, T, K>>>,
+    pending: BinaryHeap<HeapElement<A, &'b KdTree<A, T, K>>>,
     evaluated: BinaryHeap<HeapElement<A, &'b T>>,
     distance: &'a F,
 }
 
-impl<'a, 'b, 'c, A: Float + Zero + One + Signed, T: 'b, F: 'a, const K: usize> Iterator
-    for NearestIter<'a, 'b, 'c, A, T, F, K>
+impl<'a, 'b, A: Float + Zero + One + Signed, T: 'b, F: 'a, const K: usize> Iterator
+    for NearestIter<'a, 'b, A, T, F, K>
 where
     F: Fn(&[A; K], &[A; K]) -> A,
     T: PartialEq,
@@ -1608,7 +1498,9 @@ impl std::error::Error for ErrorKind {}
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let reason = match *self {
-            ErrorKind::OutOfPeriodicBounds => "point is out of bounds (periodic boundary conditions)",
+            ErrorKind::OutOfPeriodicBounds => {
+                "point is out of bounds (periodic boundary conditions)"
+            }
             ErrorKind::NonFiniteCoordinate => "non-finite coordinate",
             ErrorKind::ZeroCapacity => "zero capacity",
             ErrorKind::Empty => "invalid operation on empty tree",

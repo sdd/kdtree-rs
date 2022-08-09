@@ -1,8 +1,11 @@
 extern crate kiddo;
 
+use approx::assert_abs_diff_eq;
 use kiddo::distance::squared_euclidean;
 use kiddo::ErrorKind;
 use kiddo::KdTree;
+use rand::distributions::Open01;
+use rand::Rng;
 
 static POINT_A: ([f64; 2], usize) = ([0f64, 0f64], 0);
 static POINT_B: ([f64; 2], usize) = ([1f64, 1f64], 1);
@@ -10,7 +13,7 @@ static POINT_C: ([f64; 2], usize) = ([2f64, 2f64], 2);
 static POINT_D: ([f64; 2], usize) = ([3f64, 3f64], 3);
 
 #[test]
-fn it_works() {
+fn it_works_on_a_tiny_2d_dataset() {
     let capacity_per_node = 2;
     let mut kdtree = KdTree::with_per_node_capacity(capacity_per_node).unwrap();
 
@@ -81,7 +84,7 @@ fn it_works() {
 }
 
 #[test]
-fn nearest_works_with_larger_example() {
+fn nearest_works_with_larger_example_2d() {
     let vertices = vec![
         [68.91105387931276, 44.91668458105576],
         [-34.58731474945385, 71.74034814015292],
@@ -110,13 +113,17 @@ fn nearest_works_with_larger_example() {
     for vertex in vertices {
         tree.add(&vertex, ()).unwrap();
     }
-    let nearest_distance = tree.nearest(&test_point, 1, &kiddo::distance::squared_euclidean).unwrap()[0].0.sqrt();
+    let nearest_distance = tree
+        .nearest(&test_point, 1, &kiddo::distance::squared_euclidean)
+        .unwrap()[0]
+        .0
+        .sqrt();
 
     assert_eq!(nearest_distance, 8.845460919462422);
 }
 
 #[test]
-fn nearest_one_works_with_larger_example() {
+fn nearest_one_works_with_larger_example_2d() {
     let vertices = vec![
         [68.91105387931276, 44.91668458105576],
         [-34.58731474945385, 71.74034814015292],
@@ -145,7 +152,11 @@ fn nearest_one_works_with_larger_example() {
     for vertex in vertices {
         tree.add(&vertex, ()).unwrap();
     }
-    let nearest_distance = tree.nearest_one(&test_point, &kiddo::distance::squared_euclidean).unwrap().0.sqrt();
+    let nearest_distance = tree
+        .nearest_one(&test_point, &kiddo::distance::squared_euclidean)
+        .unwrap()
+        .0
+        .sqrt();
 
     assert_eq!(nearest_distance, 8.845460919462422);
 }
@@ -175,7 +186,7 @@ fn handles_non_finite_coordinate() {
 }
 
 #[test]
-fn handles_singularity() {
+fn handles_multiple_points_with_same_position_2d() {
     let mut kdtree = KdTree::with_per_node_capacity(1).unwrap();
     kdtree.add(&POINT_A.0, POINT_A.1).unwrap();
     kdtree.add(&POINT_A.0, POINT_A.1).unwrap();
@@ -196,7 +207,6 @@ fn handles_pending_order() {
     let item3 = ([45f64], 3);
     let item4 = ([55f64], 4);
 
-    // Build a kd tree
     let capacity_per_node = 2;
     let mut kdtree = KdTree::with_per_node_capacity(capacity_per_node).unwrap();
 
@@ -332,7 +342,7 @@ fn handles_remove_correctly() {
 }
 
 #[test]
-fn handles_remove_multiple_match() {
+fn handles_remove_multiple_matching_nodes() {
     let item1 = ([0f64], 1);
     let item2 = ([0f64], 1);
     let item3 = ([100f64], 2);
@@ -389,954 +399,377 @@ fn error_messages_do_not_overflow_stack() {
     format!("{}", ErrorKind::Empty);
 }
 
-#[test]
-fn test_periodic_1d_nearest() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
-    // Initialize dimensionality and data specs
-    const K: usize = 1;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
-
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
+fn generate_random_points<const K: usize>(num_points: usize) -> Vec<[f64; K]> {
     let mut rng = rand::thread_rng();
+    let mut result: Vec<[f64; K]> = Vec::with_capacity(num_points);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
-
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
+    for _ in 0..num_points {
+        let mut pt = [0.0; K];
         for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
+            pt[j] = rng.sample(Open01);
         }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
+        result.push(pt);
     }
 
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<(f64, &usize)> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.nearest_one(&q, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbor = (std::f64::MAX, std::usize::MAX);
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this is the new closest neighbor, replace 
-            if min < neighbor.0 {
-                neighbor = (min, data_index)
-            }
-        }
-
-        // Check that brute force result agrees with KdTree result
-        assert_eq!(&neighbor.1, knns[query_index].1, "{} {}", neighbor.0, knns[query_index].0);
-        assert!((neighbor.0 - knns[query_index].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index].0);
-    }
+    result
 }
 
+#[test]
+fn test_periodic_basic_2d() {
+    /*
+       let's build a dataset that looks like this,
+       where we have just 2 points, at [9.0, 1.0]
+
+                 ^ Y
+                 |
+                 |        o
+       ----------+----------> X
+                 |
+                 |
+
+       If we set the period to [10, 10], we can assert some
+       simple queries and with obvious expected results.
+
+       for instance, querying [0, 0] should give us a result
+       from the image to the left of the origin, at [-1.0, 1.0].
+    */
+
+    const PERIOD: [f64; 2] = [10.0f64, 10.0f64];
+
+    let item1 = ([9.0f64, 1.0f64], 1usize);
+    let mut tree: KdTree<f64, &usize, 2> = KdTree::new();
+    tree.add(&item1.0, &item1.1).unwrap();
+
+    // querying to the far left of the point should give us a
+    // path via the image on the left
+    let query_pt = [0.0, 0.0];
+    let result = tree
+        .nearest_one_periodic(&query_pt, &squared_euclidean, &PERIOD)
+        .unwrap();
+
+    assert_eq!(**result.1, 1);
+    assert_eq!(result.0, 2.0);
+
+    // querying near the point should give us a direct path
+    let query_pt = [8.0, 0.0];
+    let result = tree
+        .nearest_one_periodic(&query_pt, &squared_euclidean, &PERIOD)
+        .unwrap();
+
+    assert_eq!(**result.1, 1);
+    assert_eq!(result.0, 2.0);
+
+    // querying near the top of the period should give us a path
+    // via the image above
+    let query_pt = [8.0, 9.0];
+    let result = tree
+        .nearest_one_periodic(&query_pt, &squared_euclidean, &PERIOD)
+        .unwrap();
+
+    assert_eq!(**result.1, 1);
+    assert_eq!(result.0, 5.0);
+}
+
+#[test]
+fn test_periodic_1d_nearest() {
+    const K: usize = 1;
+    const NQUERY: usize = 1_000;
+    const NDATA: usize = 1_000;
+    const PERIOD: [f64; K] = [1.0; K];
+
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
+
+    for query_point in queries {
+        let kiddo_result = tree
+            .nearest_one_periodic(&query_point, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, f64::MAX, 1);
+
+        assert_eq!(kiddo_result.1, &brute_result[0].1);
+        assert_abs_diff_eq!(kiddo_result.0, brute_result[0].0);
+    }
+}
 
 #[test]
 fn test_periodic_2d_nearest() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
-    // Initialize dimensionality and data specs
     const K: usize = 2;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
+    for query_point in queries {
+        let kiddo_result = tree
+            .nearest_one_periodic(&query_point, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, f64::MAX, 1);
 
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<(f64, &usize)> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.nearest_one(&q, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbor = (std::f64::MAX, std::usize::MAX);
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this is the new closest neighbor, replace 
-            if min < neighbor.0 {
-                neighbor = (min, data_index)
-            }
-        }
-
-        // Check that brute force result agrees with KdTree result
-        assert_eq!(&neighbor.1, knns[query_index].1, "{} {}", neighbor.0, knns[query_index].0);
-        assert!((neighbor.0 - knns[query_index].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index].0);
+        assert_eq!(kiddo_result.1, &brute_result[0].1);
+        assert_abs_diff_eq!(kiddo_result.0, brute_result[0].0);
     }
 }
-
 
 #[test]
 fn test_periodic_3d_nearest() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
-    // Initialize dimensionality and data specs
     const K: usize = 3;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
+    for query_point in queries {
+        let kiddo_result = tree
+            .nearest_one_periodic(&query_point, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, f64::MAX, 1);
 
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<(f64, &usize)> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.nearest_one(&q, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbor = (std::f64::MAX, std::usize::MAX);
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this is the new closest neighbor, replace 
-            if min < neighbor.0 {
-                neighbor = (min, data_index)
-            }
-        }
-
-        // Check that brute force result agrees with KdTree result
-        assert_eq!(&neighbor.1, knns[query_index].1, "{} {}", neighbor.0, knns[query_index].0);
-        assert!((neighbor.0 - knns[query_index].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index].0);
+        assert_eq!(kiddo_result.1, &brute_result[0].1);
+        assert_abs_diff_eq!(kiddo_result.0, brute_result[0].0);
     }
 }
-
-
-
 
 #[test]
 fn test_periodic_1d_nearest_n() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
     // Number of neighbors
     const N: usize = 5;
 
-    // Initialize dimensionality and data specs
     const K: usize = 1;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
-
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<Vec<(f64, &usize)>> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.nearest(&q, N, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbors = [(std::f64::MAX, std::usize::MAX); N];
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this is closer than the current Nth neighbor, replace and sort
-            if min < neighbors[N-1].0 {
-                neighbors[N-1] = (min, data_index);
-                neighbors = sort_array(neighbors);
-            }
-        }
+    for query_point in queries {
+        let kiddo_result = tree
+            .nearest_periodic(&query_point, N, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, f64::MAX, N);
 
         // Check that brute force result agrees with KdTree result
-        for (k, neighbor) in neighbors.iter().enumerate() {
-            assert_eq!(&neighbor.1, knns[query_index][k].1, "{} {}", neighbor.0, knns[query_index][k].0);
-            assert!((neighbor.0 - knns[query_index][k].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index][k].0);
+        for (idx, brute_neighbour) in brute_result.iter().enumerate() {
+            assert_eq!(
+                *kiddo_result[idx].1, brute_neighbour.1,
+                "{} {}",
+                &kiddo_result[idx].1, &brute_neighbour.1
+            );
+            assert_abs_diff_eq!(kiddo_result[idx].0, brute_neighbour.0);
         }
     }
 }
-
 
 #[test]
 fn test_periodic_2d_nearest_n() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
     // Number of neighbors
     const N: usize = 5;
 
-    // Initialize dimensionality and data specs
     const K: usize = 2;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
-
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<Vec<(f64, &usize)>> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.nearest(&q, N, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbors = [(std::f64::MAX, std::usize::MAX); N];
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this is closer than the current Nth neighbor, replace and sort
-            if min < neighbors[N-1].0 {
-                neighbors[N-1] = (min, data_index);
-                neighbors = sort_array(neighbors);
-            }
-        }
+    for query_point in queries {
+        let kiddo_result = tree
+            .nearest_periodic(&query_point, N, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, f64::MAX, N);
 
         // Check that brute force result agrees with KdTree result
-        for (k, neighbor) in neighbors.iter().enumerate() {
-            assert_eq!(&neighbor.1, knns[query_index][k].1, "{} {}", neighbor.0, knns[query_index][k].0);
-            assert!((neighbor.0 - knns[query_index][k].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index][k].0);
+        for (idx, brute_neighbour) in brute_result.iter().enumerate() {
+            assert_eq!(
+                *kiddo_result[idx].1, brute_neighbour.1,
+                "{} {}",
+                &kiddo_result[idx].1, &brute_neighbour.1
+            );
+            assert_abs_diff_eq!(kiddo_result[idx].0, brute_neighbour.0);
         }
     }
 }
-
 
 #[test]
 fn test_periodic_3d_nearest_n() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
     // Number of neighbors
     const N: usize = 5;
 
-    // Initialize dimensionality and data specs
     const K: usize = 3;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
-
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<Vec<(f64, &usize)>> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.nearest(&q, N, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbors = [(std::f64::MAX, std::usize::MAX); N];
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this is closer than the current Nth neighbor, replace and sort
-            if min < neighbors[N-1].0 {
-                neighbors[N-1] = (min, data_index);
-                neighbors = sort_array(neighbors);
-            }
-        }
+    for query_point in queries {
+        let kiddo_result = tree
+            .nearest_periodic(&query_point, N, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, f64::MAX, N);
 
         // Check that brute force result agrees with KdTree result
-        for (k, neighbor) in neighbors.iter().enumerate() {
-            assert_eq!(&neighbor.1, knns[query_index][k].1, "{} {}", neighbor.0, knns[query_index][k].0);
-            assert!((neighbor.0 - knns[query_index][k].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index][k].0);
+        for (idx, brute_neighbour) in brute_result.iter().enumerate() {
+            assert_eq!(
+                *kiddo_result[idx].1, brute_neighbour.1,
+                "{} {}",
+                &kiddo_result[idx].1, &brute_neighbour.1
+            );
+            assert_abs_diff_eq!(kiddo_result[idx].0, brute_neighbour.0);
         }
-
     }
 }
-
-
 
 #[test]
 fn test_periodic_1d_within() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
     // Radius to test
     const RADIUS: f64 = 0.05;
 
-    // Initialize dimensionality and data specs
     const K: usize = 1;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
-
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<Vec<(f64, &usize)>> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.within(&q, RADIUS, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbors = vec![];
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this within the target radius, append
-            if min < RADIUS {
-                neighbors.push((min, data_index));
-            }
-        }
-
-        // Sort neighbors
-        neighbors.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    for query_point in queries {
+        let kiddo_result = tree
+            .within_periodic(&query_point, RADIUS, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, 0.05, usize::MAX);
 
         // Check that brute force result agrees with KdTree result
-        for (k, neighbor) in neighbors.iter().enumerate() {
-            assert_eq!(&neighbor.1, knns[query_index][k].1, "{} {}", neighbor.0, knns[query_index][k].0);
-            assert!((neighbor.0 - knns[query_index][k].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index][k].0);
+        for (idx, brute_neighbour) in brute_result.iter().enumerate() {
+            assert_eq!(
+                *kiddo_result[idx].1, brute_neighbour.1,
+                "{} {}",
+                &kiddo_result[idx].1, &brute_neighbour.1
+            );
+            assert_abs_diff_eq!(kiddo_result[idx].0, brute_neighbour.0);
         }
     }
 }
-
 
 #[test]
 fn test_periodic_2d_within() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
     // Radius to test
     const RADIUS: f64 = 0.05;
 
-    // Initialize dimensionality and data specs
     const K: usize = 2;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
-
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<Vec<(f64, &usize)>> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.within(&q, RADIUS, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbors = vec![];
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this within the target radius, append
-            if min < RADIUS {
-                neighbors.push((min, data_index));
-            }
-        }
-
-        // Sort neighbors
-        neighbors.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    for query_point in queries {
+        let kiddo_result = tree
+            .within_periodic(&query_point, RADIUS, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, 0.05, usize::MAX);
 
         // Check that brute force result agrees with KdTree result
-        for (k, neighbor) in neighbors.iter().enumerate() {
-            assert_eq!(&neighbor.1, knns[query_index][k].1, "{} {}", neighbor.0, knns[query_index][k].0);
-            assert!((neighbor.0 - knns[query_index][k].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index][k].0);
+        for (idx, brute_neighbour) in brute_result.iter().enumerate() {
+            assert_eq!(
+                *kiddo_result[idx].1, brute_neighbour.1,
+                "{} {}",
+                &kiddo_result[idx].1, &brute_neighbour.1
+            );
+            assert_abs_diff_eq!(kiddo_result[idx].0, brute_neighbour.0);
         }
     }
 }
-
 
 #[test]
 fn test_periodic_3d_within() {
-
-    // data, query, knns are stored on the heap here because test threads have small stack sizes
-    // in a real application, these could be stored in arrays.
-
-    use rand::distributions::{Distribution, Uniform};
-    use rayon::prelude::*;
-
     // Radius to test
     const RADIUS: f64 = 0.05;
 
-    // Initialize dimensionality and data specs
     const K: usize = 3;
-    const NQUERY: usize = 10_000;
-    const NDATA: usize = 1_000;
-    const PERIODIC: [f64; K] = [1.0; K];
+    const NQUERY: usize = 100;
+    const NDATA: usize = 100;
+    const PERIOD: [f64; K] = [1.0; K];
 
-    // Initialize rng
-    let uniform = Uniform::new(0.0, 1.0);
-    let mut rng = rand::thread_rng();
+    let (data, queries, tree) = generate_tree_and_queries(NDATA, NQUERY);
 
-    // Initialize KdTree
-    println!("initializing tree");
-    let mut tree = KdTree::periodic_with_per_node_capacity(32, &PERIODIC).unwrap();
-
-    // Initialize data points (aka point cloud)
-    let mut data = vec![[0.0; K]; NDATA];
-    for i in 0..NDATA {
-        for j in 0..K {
-
-            // Save to array to compare with brute force
-            data[i][j] = uniform.sample(&mut rng);
-        }
-
-        // Add to tree
-        tree.add(&data[i], i).expect("Couldn't add to tree");
-    }
-
-    // Initialize query points
-    let mut query = vec![[0.0; K]; NQUERY];
-    for i in 0..NQUERY {
-        for j in 0..K {
-            // Save to array to compare with brute force
-            query[i][j] = uniform.sample(&mut rng);
-        }
-    }
-
-    // Query points
-    let knns: Vec<Vec<(f64, &usize)>> = (&query)
-        .into_par_iter()
-        .map_with(&tree, |t, q| {
-            t.within(&q, RADIUS, &squared_euclidean).unwrap()
-        }).collect::<Vec<_>>();
-
-    // Check vs brute force
-    for (query_index, q) in query.iter().enumerate() {
-        
-        // Initialize neighbor
-        let mut neighbors = vec![];
-
-        for (data_index, d) in data.iter().enumerate() {
-
-            // Initialize min
-            let mut min: f64 = std::f64::MAX;
-
-            // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
-            for image_idx in 0..3_i32.pow(K as u32) {
-
-                // Initialize current_image template
-                let mut current_image: [i32; K] = [0; K];
-
-                // Calculate current image
-                for idx in 0..K {
-                    current_image[idx] = (( image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
-                }
-
-                // Construct current image position
-                let mut image: [f64; K] = q.clone();
-                for idx in 0..K {
-                    image[idx] += (current_image[idx] as f64)*PERIODIC[idx];
-                }
-
-                // Calculate distance for this image
-                let image_distance = squared_euclidean(&image, &d);
-
-                // Compare with current min
-                min = min.min(image_distance);
-            }
-            
-            // If this within the target radius, append
-            if min < RADIUS {
-                neighbors.push((min, data_index));
-            }
-        }
-
-        // Sort neighbors
-        neighbors.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    for query_point in queries {
+        let kiddo_result = tree
+            .within_periodic(&query_point, RADIUS, &squared_euclidean, &PERIOD)
+            .unwrap();
+        let brute_result = brute_force_periodic_nns(&data, &query_point, &PERIOD, 0.05, usize::MAX);
 
         // Check that brute force result agrees with KdTree result
-        for (k, neighbor) in neighbors.iter().enumerate() {
-            assert_eq!(&neighbor.1, knns[query_index][k].1, "{} {}", neighbor.0, knns[query_index][k].0);
-            assert!((neighbor.0 - knns[query_index][k].0).abs() < std::f64::EPSILON, "{} {}", neighbor.0, knns[query_index][k].0);
+        for (idx, brute_neighbour) in brute_result.iter().enumerate() {
+            assert_eq!(
+                *kiddo_result[idx].1, brute_neighbour.1,
+                "{} {}",
+                &kiddo_result[idx].1, &brute_neighbour.1
+            );
+            assert_abs_diff_eq!(kiddo_result[idx].0, brute_neighbour.0);
         }
-
     }
 }
 
+fn generate_tree_and_queries<const K: usize>(
+    num_data: usize,
+    num_queries: usize,
+) -> (Vec<[f64; K]>, Vec<[f64; K]>, KdTree<f64, usize, K>) {
+    let data = generate_random_points(num_data);
+    let queries = generate_random_points(num_queries);
 
+    let mut tree = KdTree::with_per_node_capacity(32).unwrap();
+    for (idx, item) in data.iter().enumerate() {
+        tree.add(item, idx).expect("Couldn't add to tree");
+    }
 
+    (data, queries, tree)
+}
 
-fn sort_array<A, T>(mut array: A) -> A
-where
-    A: AsMut<[(T, usize)]>,
-    T: PartialOrd,
-{
-    let slice = array.as_mut();
-    slice.sort_by(|a, b| a.partial_cmp(b).unwrap());
+fn brute_force_periodic_nns<const K: usize>(
+    data: &[[f64; K]],
+    query_point: &[f64; K],
+    period: &[f64; K],
+    radius: f64,
+    max_neighbours: usize,
+) -> Vec<(f64, usize)> {
+    let mut neighbors = vec![];
 
-    array
+    for (data_index, d) in data.iter().enumerate() {
+        let mut min: f64 = f64::MAX;
+
+        // Calculate distance for every image lazily (i.e. 3^K instead of 2^K)
+        for image_idx in 0..3_i32.pow(K as u32) {
+            // Initialize current_image template
+            let mut current_image: [i32; K] = [0; K];
+
+            // Calculate current image
+            for idx in 0..K {
+                current_image[idx] = ((image_idx / 3_i32.pow(idx as u32)) % 3) - 1;
+            }
+
+            // Construct current image position
+            let mut image: [f64; K] = query_point.clone();
+            for idx in 0..K {
+                image[idx] += (current_image[idx] as f64) * period[idx];
+            }
+
+            // Calculate distance for this image
+            let image_distance = squared_euclidean(&image, &d);
+
+            // Compare with current min
+            min = min.min(image_distance);
+        }
+
+        // If this is closer than the current Nth neighbor, replace and sort
+        if min < radius {
+            if neighbors.len() < max_neighbours {
+                neighbors.push((min, data_index));
+            } else if min < neighbors[max_neighbours - 1].0 {
+                neighbors[max_neighbours - 1] = (min, data_index);
+            }
+            neighbors.sort_by(|a, b| a.partial_cmp(b).unwrap())
+        }
+    }
+
+    neighbors
 }
