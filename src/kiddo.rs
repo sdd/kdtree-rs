@@ -125,13 +125,16 @@ impl<A: Float + Zero + One, T: PartialEq, const K: usize> KdTree<A, T, K> {
                 points: Vec::with_capacity(capacity),
                 bucket: Vec::with_capacity(capacity),
                 capacity,
-            }
+            },
         })
     }
 
     /// Creates a new KdTree with a specific capacity **per node**.
     ///
-    #[deprecated(since = "0.1.8", note = "with_capacity has a misleading name. Users should instead use with_per_node_capacity. with_capacity will be removed in a future release")]
+    #[deprecated(
+        since = "0.1.8",
+        note = "with_capacity has a misleading name. Users should instead use with_per_node_capacity. with_capacity will be removed in a future release"
+    )]
     pub fn with_capacity(capacity: usize) -> Result<Self, ErrorKind> {
         Self::with_per_node_capacity(capacity)
     }

@@ -9,6 +9,21 @@
 * [Benchmarks](#benchmarks)
 * [License](#license)
 
+## Features
+
+* Generic over number of dimensions, float type used as co-ordinates, and stored content type.
+* User-selectable distance metric.
+* Available query methods:
+  * Nearest one item
+  * Nearest n items (as vec or iterator)
+  * All items within specified distance (sorted and unsorted)
+  * "best" items within specified distance. "Best" is determined by the implementation of the comparison operators on the type of the stored items
+* [Periodic Boundary Conditions](https://en.wikipedia.org/wiki/Periodic_boundary_conditions) are supported. PBC-specific queries: 
+  * Nearest one item
+  * Nearest n items
+  * All items within specified distance (sorted and unsorted)
+  Thanks to [@cavemanloverboy](https://github.com/cavemanloverboy) for the PBC contribution
+
 
 ## Differences vs kdtree@0.6.0
 
