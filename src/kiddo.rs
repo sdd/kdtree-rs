@@ -1130,12 +1130,12 @@ impl<A: Float + Zero + One, T: PartialEq, const K: usize> KdTree<A, T, K> {
         }
     }
 
-    fn populate_pending<'b, F>(
+    fn populate_pending<'a, F>(
         point: &[A; K],
         max_dist: A,
         distance: &F,
-        pending: &mut impl Stack<HeapElement<A, &'b Self>>,
-        curr: &mut &'b Self,
+        pending: &mut impl Stack<HeapElement<A, &'a Self>>,
+        curr: &mut &'a Self,
     ) where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
@@ -1186,11 +1186,11 @@ impl<A: Float + Zero + One, T: PartialEq, const K: usize> KdTree<A, T, K> {
     /// assert_eq!(*nearest_first.1, 100);
     /// # Ok::<(), kiddo::ErrorKind>(())
     /// ```
-    pub fn iter_nearest<'b, 'c, F>(
-        &'c self,
-        point: &'b [A; K],
-        distance: &'b F,
-    ) -> Result<NearestIter<'b, 'c, A, T, F, K>, ErrorKind>
+    pub fn iter_nearest<'a, 'b, F>(
+        &'b self,
+        point: &'a [A; K],
+        distance: &'a F,
+    ) -> Result<NearestIter<'a, 'b, A, T, F, K>, ErrorKind>
     where
         F: Fn(&[A; K], &[A; K]) -> A,
     {
