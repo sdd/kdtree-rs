@@ -1,5 +1,5 @@
-#![doc(html_root_url = "https://docs.rs/kiddo/0.2.4")]
-#![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo/issues/")]
+#![doc(html_root_url = "https://docs.rs/kiddo/0.2.5")]
+#![doc(issue_tracker_base_url = "https://github.com/sdd/kiddo_v1/issues/")]
 
 //! # kiddo
 //!

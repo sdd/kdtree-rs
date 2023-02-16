@@ -9,6 +9,10 @@
 * [Benchmarks](#benchmarks)
 * [License](#license)
 
+## Update: Version 2 is now in beta!
+
+You're looking at the documentation for Kiddo v1. Kiddo v2, currently in beta, is a complete rewrite from the ground up and provides very significant improvements in performance. The original v0.x and v1.x repository has been moved to https://github.com/sdd/kiddo_v1 and will receive only bug fixes and sporadic updates. Primary development has been focussed on v2 since August 2022 and that's where the focus will remain. If you are in a position to try out Kiddo v2 during the beta period, please do! Feedback is very much appreciated! The API of v2 is very similar to v1 and should not require many changes to existing code. Head over to https://github.com/sdd/kiddo to take a look.
+
 
 ## Differences vs kdtree@0.6.0
 
@@ -18,7 +22,7 @@
 
 * kiddo extends kdtree's query API by adding two new query methods: `best_n_within()` and `best_n_within_into_iter()`. These are useful for performing queries such as "what are the tallest 10 mountains within 10 degrees of London", "which are the largest 100 settlements within 5 degrees of New York", or "find the brightest 100 stars within a 2 degree radius of this point on the sky". This requires your stored element type to implement `PartialOrd` or `Ord`, and for smaller values to be "better". Bringing this functionality inside of kiddo's implementation, rather than requiring an initial `within()` query followed by a filter of the results, can be over 10x faster, as can be seen in the benchmarks below.
 
-* kdtree's within() function uses a `BinaryHeap` to ensure that the results are ordered by distance from the query point. This sorting can be expensive, especially with a large number of elements. Kiddo's `within_unsorted()` method returns items in arbitrary order. For use cases that don't need the response to be sorted, this is much faster. 
+* kdtree's within() function uses a `BinaryHeap` to ensure that the results are ordered by distance from the query point. This sorting can be expensive, especially with a large number of elements. Kiddo's `within_unsorted()` method returns items in arbitrary order. For use cases that don't need the response to be sorted, this is much faster.
 
 * Some small performance gains arise from using a technique used by some Python BinaryHeap libraries. Rather than `pop()`ing and then immediately `push()`ing to a `BinaryHeap`, it is quicker in this scenario to swap the element at the of the top of the heap and then bubble the new element down.
 
@@ -116,7 +120,7 @@ cargo criterion --message-format json > criterion-kdtree.ndjson
 
 ```bash
 cargo criterion --message-format json --all-features > criterion-kiddo.ndjson
-``` 
+```
 
 * the graphs are generated in python using matplotlib. Ensure you have python installed, as well as the matplotlib and ndjdon python lbraries. Then run the following:
 
@@ -137,7 +141,7 @@ to perform your own analysis.
 ##### Adding items to the tree
 Kiddo generally has a very small performance lead over kdtree@0.6.0 at larger tree sizes, with their performance being similar on smaller trees.
 
-![Charts showing benchmark results for adding items](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_adding.png)
+![Charts showing benchmark results for adding items](https://raw.githubusercontent.com/sdd/kiddo_v1/master/benchmark_adding.png)
 
 
 ##### Retrieving the nearest n items
@@ -145,22 +149,22 @@ Kiddo generally has a very small performance lead over kdtree@0.6.0 at larger tr
 Kiddo's optimised `nearest_one()` method gives a huge performance advantage for single item queries, with up to 9x faster performance.
 Kiddo's standard `nearest()` method also outperforms kdtree@0.6.0.
 
-![Charts showing benchmark results for retrieving the nearest n items](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_nearest_n.png)
+![Charts showing benchmark results for retrieving the nearest n items](https://raw.githubusercontent.com/sdd/kiddo_v1/master/benchmark_nearest_n.png)
 
 ##### Retrieving all items within a distance, sorted
 Things look closer here at first glance but the logarithmic nature of the charted data may obscure the fact that Kiddo is often up to twice as fast as kdtree@0.6.0 here.
 
-![Charts showing benchmark results for retrieving all items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_within.png)
+![Charts showing benchmark results for retrieving all items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo_v1/master/benchmark_within.png)
 
 ##### Retrieving all items within a distance, unsorted
 kdtree@0.6.0 does not have a `within_unsorted()` method, so we are comparing kiddo's `within_unsorted()` to kdtree@0.6.0's `within()` here, with kiddo up to 5x faster on the million-item tree.
 
-![Charts showing benchmark results for retrieving all items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_within_unsorted.png)
+![Charts showing benchmark results for retrieving all items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo_v1/master/benchmark_within_unsorted.png)
 
 ##### Retrieving the best n items within a specified distance
 Kiddo's performance advantage here ranges from twice as fast for hundred-item trees up to as much as 20x faster for trees with a million items.
 
-![Charts showing benchmark results for retrieving the best n items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo/master/benchmark_best_n_within.png)
+![Charts showing benchmark results for retrieving the best n items within a specified distance](https://raw.githubusercontent.com/sdd/kiddo_v1/master/benchmark_best_n_within.png)
 
 ## License
 
