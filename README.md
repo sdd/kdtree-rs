@@ -5,6 +5,8 @@
 
 * [Crate](https://crates.io/crates/kiddo)
 * [Documentation](https://docs.rs/kiddo)
+* [Repository](https://github.com/sdd/kiddo_v1)
+* [Kiddo v2](https://github.com/sdd/kiddo)
 * [Usage](#usage)
 * [Benchmarks](#benchmarks)
 * [License](#license)
