@@ -14,7 +14,7 @@
 //! Add `kiddo` to `Cargo.toml`
 //! ```toml
 //! [dependencies]
-//! kiddo = "0.2.4"
+//! kiddo = "0.2.5"
 //! ```
 //!
 //! ## Usage
